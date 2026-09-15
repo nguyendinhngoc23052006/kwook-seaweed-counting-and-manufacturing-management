@@ -64,10 +64,10 @@ export default function Admin({ profile }: { profile: Profile }) {
     setBusy(null);
   }
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "owner") {
     return (
       <div className="wrap">
-        <div className="card">Admin access required.</div>
+        <div className="card">Owner access required.</div>
       </div>
     );
   }
@@ -152,7 +152,7 @@ export default function Admin({ profile }: { profile: Profile }) {
             ))}
             <p className="label" style={{ marginBottom: 0 }}>
               Approve in the Supabase dashboard: Table Editor → profiles → set the account's role
-              from "pending" to viewer / supervisor / manager / admin.
+              from "pending" to viewer / supervisor / manager / owner.
             </p>
           </>
         )}

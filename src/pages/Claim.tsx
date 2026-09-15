@@ -30,10 +30,10 @@ export default function Claim({ profile }: { profile: Profile }) {
       .then(({ data }) => setStations((data as StationRow[]) ?? []));
   }, []);
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "owner") {
     return (
       <div className="wrap">
-        <div className="card">Admin access required to pair cameras.</div>
+        <div className="card">Owner access required to pair cameras.</div>
       </div>
     );
   }
@@ -54,8 +54,20 @@ export default function Claim({ profile }: { profile: Profile }) {
     const { data, error } = await supabase().functions.invoke("pair-claim", {
       body: { code, name, func, station_id: stationId || null },
     });
-    if (error) setError(errorMessage(error));
-    else if (data && typeof data === "object" && "error" in data && data.error) {
+    if (error) {
+      // functions.invoke throws on a non-2xx status and hides our JSON body
+      // behind a generic message; dig the real reason out of the Response it
+      // stashes on error.context so the admin sees what actually failed.
+      let detail = errorMessage(error);
+      const ctx = (error as { context?: unknown }).context;
+      if (ctx instanceof Response) {
+        const body = await ctx.json().catch(() => null);
+        if (body && typeof body === "object" && "error" in body) {
+          detail = String((body as { error: unknown }).error);
+        }
+      }
+      setError(detail);
+    } else if (data && typeof data === "object" && "error" in data && data.error) {
       setError(String((data as { error: unknown }).error));
     } else setDone(true);
     setBusy(false);

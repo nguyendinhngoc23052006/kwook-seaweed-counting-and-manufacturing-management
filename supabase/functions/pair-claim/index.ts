@@ -35,18 +35,33 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
-  // Who is calling? Must be a signed-in human admin.
+  // Who is calling? Verify with the caller's OWN token: a user-scoped client
+  // reads its own profile under RLS (profile_self), so the admin gate never
+  // depends on the service-role key being present - only the privileged writes
+  // below do. getUser errors surface verbatim so failures are diagnosable.
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const { data: userData, error: userError } = await service.auth.getUser(jwt);
-  if (userError || !userData.user) return reply(401, { error: "Not signed in" });
+  if (!jwt) return reply(401, { error: "No Authorization token on the request" });
 
-  const { data: caller } = await service
+  const asCaller = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false } },
+  );
+
+  const { data: userData, error: userError } = await asCaller.auth.getUser();
+  if (userError || !userData.user) {
+    return reply(401, { error: `Not signed in: ${userError?.message ?? "no user"}` });
+  }
+
+  const { data: caller, error: callerError } = await asCaller
     .from("profiles")
     .select("tenant_id, kind, role")
     .eq("id", userData.user.id)
     .maybeSingle();
-  if (caller?.kind !== "human" || caller.role !== "admin") {
-    return reply(403, { error: "Admin only" });
+  if (callerError) return reply(500, { error: `Profile read failed: ${callerError.message}` });
+  if (!caller) return reply(403, { error: "No profile for this account yet" });
+  if (caller.kind !== "human" || caller.role !== "owner") {
+    return reply(403, { error: `Owner only (your role: ${caller.role})` });
   }
 
   const { code, name, func, station_id } = await req.json().catch(() => ({}));

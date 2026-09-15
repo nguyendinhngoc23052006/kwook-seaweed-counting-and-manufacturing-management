@@ -44,10 +44,10 @@ export default function Scan({ profile }: { profile: Profile }) {
     };
   }, [running]);
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "owner") {
     return (
       <div className="wrap">
-        <div className="card">Admin access required.</div>
+        <div className="card">Owner access required.</div>
       </div>
     );
   }

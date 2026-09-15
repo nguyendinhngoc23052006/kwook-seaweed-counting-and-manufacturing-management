@@ -66,7 +66,7 @@ export default function Login() {
         </div>
         {creating ? (
           <p className="label" style={{ marginBottom: 0 }}>
-            New accounts wait for admin approval before they can do anything.
+            New accounts wait for the owner to approve them before they can do anything.
           </p>
         ) : null}
         <p className="label" style={{ marginBottom: 0 }}>

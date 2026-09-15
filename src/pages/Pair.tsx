@@ -55,14 +55,14 @@ export default function Pair() {
     <div className="wrap" style={{ maxWidth: 420, textAlign: "center" }}>
       <h1>Pair this camera</h1>
       <p className="label">
-        Ask an admin to scan this code with their signed-in phone. This screen switches to the
+        Ask the owner to scan this code with their signed-in phone. This screen switches to the
         camera view by itself once approved.
       </p>
       {error ? <div className="card crit">{error}</div> : null}
       <div className="card" style={{ display: "inline-block", background: "#fff", padding: 12 }}>
         <canvas ref={canvasRef} />
       </div>
-      <p className="label">{status === "waiting" ? "Waiting for an admin…" : "Signing in…"}</p>
+      <p className="label">{status === "waiting" ? "Waiting for the owner…" : "Signing in…"}</p>
     </div>
   );
 }
