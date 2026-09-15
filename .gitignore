@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+.env.local
+.claude/scope.json
+.claude/scope-migrations/

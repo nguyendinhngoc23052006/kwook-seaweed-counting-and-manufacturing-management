@@ -1,0 +1,2 @@
+-- Seed stays empty. Tenants, stations and devices are created through /admin
+-- so that every row carries a real audit trail.
