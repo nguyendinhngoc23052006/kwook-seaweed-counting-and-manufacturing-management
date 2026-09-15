@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { connectedComponents, filterByArea, medianArea } from "../connectedComponents";
+import {
+  connectedComponents,
+  fillRatio,
+  filterBlobs,
+  filterByArea,
+  medianArea,
+} from "../connectedComponents";
+import type { Blob } from "../types";
 
 describe("connectedComponents", () => {
   it("finds two separate blobs and their areas", () => {
@@ -37,5 +44,29 @@ describe("connectedComponents", () => {
     const kept = filterByArea(blobs, 50, 500);
     expect(kept).toHaveLength(2);
     expect(medianArea(kept)).toBe(102);
+  });
+});
+
+function fakeBlob(area: number, w: number, h: number): Blob {
+  return { area, cx: 0, cy: 0, minX: 0, minY: 0, maxX: w - 1, maxY: h - 1 };
+}
+
+describe("filterBlobs", () => {
+  it("fillRatio is filled pixels over bounding box", () => {
+    expect(fillRatio(fakeBlob(50, 10, 10))).toBeCloseTo(0.5);
+    expect(fillRatio(fakeBlob(100, 10, 10))).toBeCloseTo(1);
+  });
+
+  it("drops specks below minArea (the small-dots complaint)", () => {
+    const specks = [fakeBlob(5, 3, 3), fakeBlob(20, 5, 5)];
+    expect(filterBlobs(specks, { minArea: 120, maxArea: 20000 })).toHaveLength(0);
+  });
+
+  it("drops sparse clutter by fill ratio, keeps a compact leaf", () => {
+    const leaf = fakeBlob(200, 16, 16); // fill ~0.78
+    const clutter = fakeBlob(200, 100, 20); // fill 0.10
+    const kept = filterBlobs([leaf, clutter], { minArea: 120, maxArea: 20000, minFill: 0.35 });
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toBe(leaf);
   });
 });

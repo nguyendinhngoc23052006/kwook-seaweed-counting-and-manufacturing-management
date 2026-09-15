@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "../lib/errorMessage";
+import { functionLabel } from "../lib/functionsCatalog";
 import { flush, outbox } from "../lib/outbox";
 import { type DeviceConfig, loadDeviceConfig, type Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
-import { connectedComponents, filterByArea } from "../vision/connectedComponents";
+import { connectedComponents, filterBlobs } from "../vision/connectedComponents";
 import { LineCounter } from "../vision/lineCounter";
+import { close, open } from "../vision/morphology";
 import { binarize, otsu, toGray } from "../vision/otsu";
 
 const ALGORITHM_VERSION = "line-counter@1";
 const PROC_WIDTH = 320;
-const MIN_BLOB_AREA = 30;
+const MIN_BLOB_AREA = 120; // px at 320-wide: below this is glare/specks, not leaves
 const MAX_BLOB_AREA = 20000;
+const MIN_FILL_RATIO = 0.35; // reject sparse/stringy dark clutter (shadows, seams)
+const MIN_SEPARABILITY = 0.08; // skip low-contrast frames rather than count noise
 
 // lib.dom declares requestVideoFrameCallback as required; Safari on older iOS
 // does not ship it, so it is probed at the call site instead of in the type.
@@ -124,9 +128,22 @@ export default function Capture({ profile }: { profile: Profile }) {
     ctx.drawImage(video, 0, 0, w, h);
 
     const gray = toGray(ctx.getImageData(0, 0, w, h).data);
-    const { threshold } = otsu(gray);
-    const mask = binarize(gray, threshold, true);
-    const blobs = filterByArea(connectedComponents(mask, w, h), MIN_BLOB_AREA, MAX_BLOB_AREA);
+    const { threshold, separability } = otsu(gray);
+
+    // Low separability means the frame has no clear leaf-vs-belt split (a hand
+    // over the lens, near-uniform dark). Feed the tracker an empty frame so
+    // live tracks age out, but never manufacture blobs from noise.
+    let blobs: ReturnType<typeof connectedComponents> = [];
+    if (separability >= MIN_SEPARABILITY) {
+      // open() erodes then dilates: specks vanish. close() fills pinholes so one
+      // leaf stays one blob. Then area + compactness reject what's left.
+      const mask = close(open(binarize(gray, threshold, true), w, h), w, h);
+      blobs = filterBlobs(connectedComponents(mask, w, h), {
+        minArea: MIN_BLOB_AREA,
+        maxArea: MAX_BLOB_AREA,
+        minFill: MIN_FILL_RATIO,
+      });
+    }
 
     // The line lives mid-frame whatever the camera's aspect ratio; setLineY
     // moves it without resetting the tally.
@@ -211,6 +228,14 @@ export default function Capture({ profile }: { profile: Profile }) {
     }
   }
 
+  function stop() {
+    const v = videoRef.current;
+    const stream = (v?.srcObject as MediaStream | null) ?? null;
+    for (const track of stream?.getTracks() ?? []) track.stop();
+    if (v) v.srcObject = null;
+    setRunning(false);
+  }
+
   if (error)
     return (
       <div className="wrap">
@@ -228,10 +253,10 @@ export default function Capture({ profile }: { profile: Profile }) {
 
   return (
     <div className="wrap">
-      <div className="row" style={{ justifyContent: "space-between" }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <div className="label">Device</div>
-          <strong>{config.name}</strong> · <span className="pill">{config.role}</span>
+          <strong>{config.name}</strong>
+          <div className="label">{functionLabel(config.role)}</div>
         </div>
         <span className={queued > 0 ? "pill warn" : "pill ok"}>
           {queued > 0 ? `${queued} queued` : "synced"}
@@ -241,11 +266,20 @@ export default function Capture({ profile }: { profile: Profile }) {
       <div className="card" style={{ marginTop: 16 }}>
         <div className="label">Counted this session</div>
         <div className="figure">{total}</div>
-        {!running ? (
-          <button type="button" onClick={start}>
-            Start counting
-          </button>
-        ) : null}
+        <div className="row" style={{ marginTop: 8 }}>
+          {!running ? (
+            <button type="button" onClick={start}>
+              Start counting
+            </button>
+          ) : (
+            <>
+              <span className="pill ok">● counting</span>
+              <button type="button" className="secondary" onClick={stop}>
+                Stop
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: 16, padding: 0, overflow: "hidden" }}>
