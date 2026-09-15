@@ -1,0 +1,45 @@
+// Copied from the guide's templates/. Substitute kwook-seaweed-counting-and-manufacturing-management, dist
+// and 2026-09-15.
+// Goes at the repo ROOT.
+//
+// This Worker serves static files. It does not run the framework - the build
+// happens in CI and the output directory below is what gets uploaded.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // Must match the repo name exactly: lowercase letters, numbers, hyphens.
+  "name": "kwook-seaweed-counting-and-manufacturing-management",
+
+  // 2026-09-15 = the date you create this file, ISO format, e.g. "2026-08-27".
+  // The monthly compat-date-bump workflow keeps it moving from there; Dependabot
+  // cannot, because it is a config field rather than a package.
+  "compatibility_date": "2026-09-15",
+
+  // Every uploaded-but-not-yet-deployed version gets its own URL. The preview
+  // deploy comments it on the PR; the production deploy health-checks it BEFORE
+  // promoting. Without this, blue-green has nothing to check.
+  "preview_urls": true,
+
+  "assets": {
+    "directory": "./dist/",
+
+    // Client-routed apps only. Deep links (/dashboard, /invoice/42) must return
+    // index.html rather than a 404, and Workers has no `_redirects` file.
+    // A multi-page site (Astro content, Next static export with real .html per
+    // route) should use "404-page" or omit this key instead.
+    "not_found_handling": "single-page-application"
+  },
+
+  "env": {
+    // Previews and the staging site are the same Worker under a different name,
+    // so a broken staging deploy can never take production's traffic.
+    "staging": {
+      "name": "kwook-seaweed-counting-and-manufacturing-management-staging",
+      "preview_urls": true,
+      "assets": {
+        "directory": "./dist/",
+        "not_found_handling": "single-page-application"
+      }
+    }
+  }
+}
