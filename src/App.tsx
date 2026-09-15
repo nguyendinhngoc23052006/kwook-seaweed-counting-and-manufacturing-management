@@ -5,8 +5,10 @@ import { loadProfile, type Profile } from "./lib/session";
 import { supabase } from "./lib/supabaseClient";
 import Admin from "./pages/Admin";
 import Capture from "./pages/Capture";
+import Claim from "./pages/Claim";
 import Demo from "./pages/Demo";
 import Login from "./pages/Login";
+import Pair from "./pages/Pair";
 import Wall from "./pages/Wall";
 
 export default function App() {
@@ -24,6 +26,9 @@ export default function App() {
   // The demo is camera-only: no database reads, no writes, no device row. It
   // renders before the auth gate so the counter can be shown on any phone.
   if (window.location.pathname === "/demo") return <Demo />;
+  // Pairing renders before the auth gate too: a camera-to-be has no session -
+  // it shows a QR and receives one when an admin claims it.
+  if (window.location.pathname === "/pair") return <Pair />;
 
   if (loading) return <div className="wrap">Loading…</div>;
   if (error) {
@@ -70,6 +75,7 @@ export default function App() {
         <Route path="/capture" element={<Capture profile={profile} />} />
         <Route path="/wall" element={<Wall profile={profile} />} />
         <Route path="/admin" element={<Admin profile={profile} />} />
+        <Route path="/claim" element={<Claim profile={profile} />} />
         <Route path="/demo" element={<Demo />} />
         <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>

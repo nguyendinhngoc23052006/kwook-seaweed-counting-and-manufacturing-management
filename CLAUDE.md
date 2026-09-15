@@ -83,6 +83,15 @@ app can use it.
   applies to production and does not apply to persistent branches without an
   explicit `[remotes.<name>.db.seed]` block. Never seed a real environment.
 
+- **Cameras never have credentials.** Any browser becomes a camera via /pair:
+  it invents a local secret, shows a QR, and an admin claims it (pair-claim
+  Edge Function, service role, admin JWT verified server-side). No signup, no
+  password, no public request endpoint - an unclaimed camera is a local secret
+  and a spinner, so account spam is structurally impossible. The machine is the
+  devices ROW, not the phone: unpair (revoked_at) cuts the phone off in the
+  database itself (is_active_device() in every device write policy) and keeps
+  every row the camera ever wrote. There is deliberately no device delete -
+  it would cascade into history.
 - Publishable key in the browser, secret key server-only, RLS on every table.
 - The device screen shows only its own station's figures — never totals, never
   other stations, never per-operator numbers. A stolen device credential must be

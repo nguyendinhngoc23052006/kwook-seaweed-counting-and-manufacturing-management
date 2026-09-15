@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { errorMessage } from "../lib/errorMessage";
-import type { DeviceRole, Profile } from "../lib/session";
+import { functionLabel } from "../lib/functionsCatalog";
+import type { Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
-
-interface ProfileRow {
-  id: string;
-  kind: "device" | "human";
-  role: string;
-  display_name: string;
-}
 
 interface DeviceRow {
   id: string;
@@ -21,76 +15,43 @@ interface DeviceRow {
 interface StationRow {
   id: string;
   name: string;
-  kind: string;
 }
 
-// The functions a camera can be configured to run. Only seaweed counting
-// exists today; future functions (QA/QC compliance, idle detection, ...) are
-// added HERE as the vision core grows - a new row in this catalog is the only
-// change the admin UI needs.
-const FUNCTIONS: { value: DeviceRole; label: string }[] = [
-  { value: "counting", label: "Count seaweed leaves" },
-];
-
-function functionLabel(role: string): string {
-  return FUNCTIONS.find((f) => f.value === role)?.label ?? role;
+interface PendingRow {
+  id: string;
+  display_name: string;
 }
 
 export default function Admin({ profile }: { profile: Profile }) {
-  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [stations, setStations] = useState<StationRow[]>([]);
+  const [pending, setPending] = useState<PendingRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [p, d, s] = await Promise.all([
-      supabase().from("profiles").select("id, kind, role, display_name").order("display_name"),
+    const [d, s, p] = await Promise.all([
       supabase().from("devices").select("id, name, role, station_id, revoked_at").order("name"),
-      supabase().from("stations").select("id, name, kind").order("name"),
+      supabase().from("stations").select("id, name").order("name"),
+      supabase()
+        .from("profiles")
+        .select("id, display_name")
+        .eq("kind", "human")
+        .eq("role", "pending")
+        .order("display_name"),
     ]);
-    setProfiles((p.data as ProfileRow[]) ?? []);
     setDevices((d.data as DeviceRow[]) ?? []);
     setStations((s.data as StationRow[]) ?? []);
+    setPending((p.data as PendingRow[]) ?? []);
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function makeDevice(row: ProfileRow, role: DeviceRole, stationId: string) {
-    setBusy(row.id);
-    setError(null);
-    try {
-      // Order matters: flip the profile first. The devices insert is checked by
-      // a policy that does not care about kind, but a devices row pointing at a
-      // profile still marked 'human' would read as a device that can also sign
-      // in as a person.
-      const flip = await supabase()
-        .from("profiles")
-        .update({ kind: "device", role: "viewer" })
-        .eq("id", row.id);
-      if (flip.error) throw flip.error;
-
-      const insert = await supabase()
-        .from("devices")
-        .insert({
-          id: row.id,
-          tenant_id: profile.tenant_id,
-          name: row.display_name,
-          role,
-          station_id: stationId || null,
-        });
-      if (insert.error) throw insert.error;
-
-      await load();
-    } catch (e: unknown) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
+  // Unpair keeps every row the camera ever wrote - it only cuts the phone off
+  // (revoked_at blocks its writes in the database itself). There is
+  // deliberately NO delete: deleting a device would cascade into its history.
   async function setRevoked(id: string, revoked: boolean) {
     setBusy(id);
     setError(null);
@@ -98,7 +59,7 @@ export default function Admin({ profile }: { profile: Profile }) {
       .from("devices")
       .update({ revoked_at: revoked ? new Date().toISOString() : null })
       .eq("id", id);
-    if (error) setError(error.message);
+    if (error) setError(errorMessage(error));
     await load();
     setBusy(null);
   }
@@ -111,27 +72,41 @@ export default function Admin({ profile }: { profile: Profile }) {
     );
   }
 
-  const deviceIds = new Set(devices.map((d) => d.id));
-  const candidates = profiles.filter((p) => !deviceIds.has(p.id) && p.id !== profile.id);
+  const stationName = (id: string | null) => stations.find((s) => s.id === id)?.name ?? "-";
 
   return (
     <div className="wrap">
-      <h1>Admin</h1>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h1 style={{ margin: 0 }}>Admin</h1>
+        <button
+          type="button"
+          className="secondary"
+          onClick={async () => {
+            await supabase().auth.signOut();
+            window.location.reload();
+          }}
+        >
+          Sign out
+        </button>
+      </div>
       {error ? <div className="card crit">{error}</div> : null}
 
-      <h2>Devices</h2>
+      <h2>Cameras</h2>
       <div className="card">
+        <p className="label">
+          Pair a new camera: open this site on the camera phone, tap "Use this device as a camera",
+          then scan the QR it shows with your signed-in phone. Unpairing keeps all of a camera's
+          data.
+        </p>
         {devices.length === 0 ? (
-          <p className="label">
-            No cameras yet. On the camera's phone, open this site and create an account for it - it
-            will appear below, ready to be configured.
-          </p>
+          <p className="label">No cameras paired yet.</p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Function</th>
+                <th>Station</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -141,8 +116,9 @@ export default function Admin({ profile }: { profile: Profile }) {
                 <tr key={d.id}>
                   <td>{d.name}</td>
                   <td>{functionLabel(d.role)}</td>
+                  <td>{stationName(d.station_id)}</td>
                   <td className={d.revoked_at ? "crit" : "ok"}>
-                    {d.revoked_at ? "revoked" : "active"}
+                    {d.revoked_at ? "unpaired" : "paired"}
                   </td>
                   <td>
                     <button
@@ -151,7 +127,7 @@ export default function Admin({ profile }: { profile: Profile }) {
                       disabled={busy === d.id}
                       onClick={() => setRevoked(d.id, !d.revoked_at)}
                     >
-                      {d.revoked_at ? "Restore" : "Revoke"}
+                      {d.revoked_at ? "Re-activate" : "Unpair"}
                     </button>
                   </td>
                 </tr>
@@ -161,70 +137,23 @@ export default function Admin({ profile }: { profile: Profile }) {
         )}
       </div>
 
-      <h2>Accounts that can become cameras</h2>
+      <h2>People waiting for approval</h2>
       <div className="card">
-        {candidates.length === 0 ? (
-          <p className="label">No unpaired accounts.</p>
+        {pending.length === 0 ? (
+          <p className="label">Nobody waiting.</p>
         ) : (
-          candidates.map((c) => (
-            <Candidate
-              key={c.id}
-              row={c}
-              stations={stations}
-              busy={busy === c.id}
-              onPair={makeDevice}
-            />
-          ))
+          <>
+            {pending.map((p) => (
+              <div className="row" key={p.id} style={{ marginBottom: 4 }}>
+                <strong>{p.display_name}</strong>
+              </div>
+            ))}
+            <p className="label" style={{ marginBottom: 0 }}>
+              Approve in the Supabase dashboard: Table Editor → profiles → set the account's role
+              from "pending" to viewer / supervisor / manager / admin.
+            </p>
+          </>
         )}
-      </div>
-    </div>
-  );
-}
-
-function Candidate({
-  row,
-  stations,
-  busy,
-  onPair,
-}: {
-  row: ProfileRow;
-  stations: StationRow[];
-  busy: boolean;
-  onPair: (row: ProfileRow, role: DeviceRole, stationId: string) => void;
-}) {
-  const [role, setRole] = useState<DeviceRole>("counting");
-  const [stationId, setStationId] = useState("");
-
-  return (
-    <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-      <strong>{row.display_name}</strong>
-      <div className="row">
-        <select
-          id={`role-${row.id}`}
-          value={role}
-          onChange={(e) => setRole(e.target.value as DeviceRole)}
-        >
-          {FUNCTIONS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select
-          id={`station-${row.id}`}
-          value={stationId}
-          onChange={(e) => setStationId(e.target.value)}
-        >
-          <option value="">no station</option>
-          {stations.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <button type="button" disabled={busy} onClick={() => onPair(row, role, stationId)}>
-          {busy ? "Pairing…" : "Make device"}
-        </button>
       </div>
     </div>
   );
