@@ -49,6 +49,18 @@ never edit a migration that has been applied.
 
 ## Security
 
+- **Never put a Claude Code session link in a commit message, PR body, or PR
+  comment.** No attribution URLs in anything pushed to this repository.
+- **Public sign-up is off** (`supabase/config.toml`, `[auth] enable_signup`).
+  Accounts are created by an admin, never self-served: with signup on, anyone who
+  found the URL got a profile from the `on_auth_user_created` trigger and could
+  read the tenant's counts and compliance events - and the FIRST account to sign
+  up becomes admin. `config.toml` does not reach production, so production signup
+  is off in the Supabase dashboard instead.
+- **Demo credentials live only in `supabase/seed.sql`**, which Supabase never
+  applies to production and does not apply to persistent branches without an
+  explicit `[remotes.<name>.db.seed]` block. Never seed a real environment.
+
 - Publishable key in the browser, secret key server-only, RLS on every table.
 - The device screen shows only its own station's figures — never totals, never
   other stations, never per-operator numbers. A stolen device credential must be
