@@ -227,8 +227,14 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-enable_signup = false
+# DO NOT set this to false. On a hosted project the CLI maps
+# [auth.email].enable_signup to the Management API's `external_email_enabled`,
+# which is the email PROVIDER switch, not a signup switch - setting it false
+# turns off email sign-in for everyone, demo accounts included. Signup is
+# already closed by [auth].enable_signup = false above, which maps to
+# `disable_signup` and blocks new accounts while leaving sign-in working.
+# (Mapping read out of the supabase CLI's own config->API table, 2026-09-15.)
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -265,7 +271,9 @@ otp_expiry = 3600
 # content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
-# Allow/disallow new user signups via SMS to your project.
+# Same mapping trap as [auth.email] above - this becomes `external_phone_enabled`.
+# Here that is what we want: this project never uses SMS auth, so the phone
+# provider stays off entirely.
 enable_signup = false
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
