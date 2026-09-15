@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "../lib/errorMessage";
-import { connectedComponents, filterByArea } from "../vision/connectedComponents";
+import { connectedComponents, filterBlobs } from "../vision/connectedComponents";
 import { LineCounter } from "../vision/lineCounter";
 import { close, open } from "../vision/morphology";
 import { binarize, otsu, toGray } from "../vision/otsu";
@@ -137,7 +137,13 @@ export default function Demo() {
     const gray = toGray(ctx.getImageData(0, 0, w, h).data);
     const { threshold } = otsu(gray);
     const mask = close(open(binarize(gray, threshold, s.darkOnLight), w, h), w, h);
-    const blobs = filterByArea(connectedComponents(mask, w, h), s.minArea, w * h);
+    // Same compactness gate as the operator page: reject sparse dark clutter
+    // (fillRatio) on top of the size slider.
+    const blobs = filterBlobs(connectedComponents(mask, w, h), {
+      minArea: s.minArea,
+      maxArea: w * h,
+      minFill: 0.35,
+    });
 
     const lineY = (s.linePercent / 100) * h;
     counter.setLineY(lineY);
