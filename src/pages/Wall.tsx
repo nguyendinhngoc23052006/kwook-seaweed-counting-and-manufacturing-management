@@ -40,6 +40,11 @@ export default function Wall({ profile }: { profile: Profile }) {
         <h1 style={{ margin: 0 }}>Wall</h1>
         <div className="row">
           <span className="label">{profile.display_name}</span>
+          {profile.role === "owner" ? (
+            <a href="/admin">
+              <button type="button">Manage cameras</button>
+            </a>
+          ) : null}
           <button
             type="button"
             className="secondary"

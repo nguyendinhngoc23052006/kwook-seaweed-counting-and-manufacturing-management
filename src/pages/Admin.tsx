@@ -78,16 +78,23 @@ export default function Admin({ profile }: { profile: Profile }) {
     <div className="wrap">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h1 style={{ margin: 0 }}>Admin</h1>
-        <button
-          type="button"
-          className="secondary"
-          onClick={async () => {
-            await supabase().auth.signOut();
-            window.location.reload();
-          }}
-        >
-          Sign out
-        </button>
+        <div className="row">
+          <a href="/wall">
+            <button type="button" className="secondary">
+              Wall
+            </button>
+          </a>
+          <button
+            type="button"
+            className="secondary"
+            onClick={async () => {
+              await supabase().auth.signOut();
+              window.location.reload();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
       {error ? <div className="card crit">{error}</div> : null}
 
