@@ -95,9 +95,11 @@ export default function Admin({ profile }: { profile: Profile }) {
       <div className="card">
         <p className="label">
           Pair a new camera: open this site on the camera phone, tap "Use this device as a camera",
-          then scan the QR it shows with your signed-in phone. Unpairing keeps all of a camera's
-          data.
+          then scan its QR here. Unpairing keeps all of a camera's data.
         </p>
+        <a href="/scan">
+          <button type="button">Scan camera QR</button>
+        </a>
         {devices.length === 0 ? (
           <p className="label">No cameras paired yet.</p>
         ) : (
