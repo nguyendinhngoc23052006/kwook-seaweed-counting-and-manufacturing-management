@@ -182,11 +182,23 @@ jobs:
           [ -n "$KEY" ] || { echo "No publishable or anon key on $REF"; exit 1; }
           echo "::add-mask::$KEY"
 
-          SETTINGS=$(curl -sS --fail --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY")
-          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null \
-            || { echo "Email provider is OFF - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq .; exit 1; }
-          printf '%s' "$SETTINGS" | jq -e '.disable_signup == true' >/dev/null \
-            || { echo "Public signup is OPEN on this preview branch - config.toml did not apply. Settings:"; printf '%s\n' "$SETTINGS" | jq .; exit 1; }
+          # A fresh preview branch reports its DATABASE healthy before the
+          # Configurations and Seeding tasks have run - the first execution of
+          # this canary read settings 17 seconds after branch creation and saw
+          # signup still open. So wait, bounded, for the config to land instead
+          # of failing on the race.
+          SETTINGS=""
+          for _ in $(seq 1 18); do   # 18 * 10s = 3 minutes
+            SETTINGS=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY" || echo "")
+            if printf '%s' "$SETTINGS" | jq -e '.external.email == true and .disable_signup == true' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null 2>&1 \
+            || { echo "Email provider is OFF - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq . 2>/dev/null || printf '%s\n' "$SETTINGS"; exit 1; }
+          printf '%s' "$SETTINGS" | jq -e '.disable_signup == true' >/dev/null 2>&1 \
+            || { echo "Public signup is STILL open after 3 minutes - config.toml did not apply to this branch. Settings:"; printf '%s\n' "$SETTINGS" | jq . 2>/dev/null || printf '%s\n' "$SETTINGS"; exit 1; }
 
           case "$DB" in
             *isolated*) ;;
@@ -197,12 +209,19 @@ jobs:
           esac
 
           # Credentials from supabase/seed.sql. They exist only on ephemeral
-          # preview branches, which is the only place this block runs.
-          TOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/token?grant_type=password" \
-            -H "apikey: $KEY" -H "Content-Type: application/json" \
-            -d '{"email":"demo-admin@kwook.test","password":"demo-kwook-2026"}' \
-            | jq -r '.access_token // empty')
-          [ -n "$TOKEN" ] || { echo "Password sign-in FAILED for the seeded demo admin"; exit 1; }
+          # preview branches, which is the only place this block runs. Seeding
+          # is a branch task like Configurations, so give it the same bounded
+          # wait before declaring sign-in broken.
+          TOKEN=""
+          for _ in $(seq 1 18); do
+            TOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/token?grant_type=password" \
+              -H "apikey: $KEY" -H "Content-Type: application/json" \
+              -d '{"email":"demo-admin@kwook.test","password":"demo-kwook-2026"}' \
+              | jq -r '.access_token // empty' || echo "")
+            [ -n "$TOKEN" ] && break
+            sleep 10
+          done
+          [ -n "$TOKEN" ] || { echo "Password sign-in STILL failing for the seeded demo admin after 3 minutes - the seed did not run or auth is broken"; exit 1; }
 
           ROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/profiles?select=id&limit=1" \
             -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN")
