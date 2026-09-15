@@ -24,7 +24,17 @@ interface StationRow {
   kind: string;
 }
 
-const DEVICE_ROLES: DeviceRole[] = ["counting", "provisioning", "compliance", "overview"];
+// The functions a camera can be configured to run. Only seaweed counting
+// exists today; future functions (QA/QC compliance, idle detection, ...) are
+// added HERE as the vision core grows - a new row in this catalog is the only
+// change the admin UI needs.
+const FUNCTIONS: { value: DeviceRole; label: string }[] = [
+  { value: "counting", label: "Count seaweed leaves" },
+];
+
+function functionLabel(role: string): string {
+  return FUNCTIONS.find((f) => f.value === role)?.label ?? role;
+}
 
 export default function Admin({ profile }: { profile: Profile }) {
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
@@ -113,15 +123,15 @@ export default function Admin({ profile }: { profile: Profile }) {
       <div className="card">
         {devices.length === 0 ? (
           <p className="label">
-            No devices yet. Create a second account in Supabase (Authentication → Users → Add user),
-            sign out and in once so its profile exists, then pair it below.
+            No cameras yet. On the camera's phone, open this site and create an account for it - it
+            will appear below, ready to be configured.
           </p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Role</th>
+                <th>Function</th>
                 <th>Status</th>
                 <th />
               </tr>
@@ -130,7 +140,7 @@ export default function Admin({ profile }: { profile: Profile }) {
               {devices.map((d) => (
                 <tr key={d.id}>
                   <td>{d.name}</td>
-                  <td>{d.role}</td>
+                  <td>{functionLabel(d.role)}</td>
                   <td className={d.revoked_at ? "crit" : "ok"}>
                     {d.revoked_at ? "revoked" : "active"}
                   </td>
@@ -151,7 +161,7 @@ export default function Admin({ profile }: { profile: Profile }) {
         )}
       </div>
 
-      <h2>Accounts that can become devices</h2>
+      <h2>Accounts that can become cameras</h2>
       <div className="card">
         {candidates.length === 0 ? (
           <p className="label">No unpaired accounts.</p>
@@ -194,9 +204,9 @@ function Candidate({
           value={role}
           onChange={(e) => setRole(e.target.value as DeviceRole)}
         >
-          {DEVICE_ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
+          {FUNCTIONS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
             </option>
           ))}
         </select>

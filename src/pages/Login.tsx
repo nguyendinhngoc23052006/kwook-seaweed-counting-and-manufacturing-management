@@ -48,20 +48,27 @@ export default function Login() {
           onChange={(e) => setPassword(e.target.value)}
           style={{ width: "100%", marginBottom: 12 }}
         />
-        <button type="submit" disabled={busy}>
-          {busy ? "Working…" : creating ? "Create account" : "Sign in"}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          style={{ marginLeft: 8 }}
-          onClick={() => {
-            setCreating(!creating);
-            setError(null);
-          }}
-        >
-          {creating ? "Have an account? Sign in" : "New here? Create account"}
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button type="submit" disabled={busy} style={{ width: "100%" }}>
+            {busy ? "Working…" : creating ? "Create account" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            style={{ width: "100%" }}
+            onClick={() => {
+              setCreating(!creating);
+              setError(null);
+            }}
+          >
+            {creating ? "Have an account? Sign in" : "New here? Create account"}
+          </button>
+        </div>
+        {creating ? (
+          <p className="label" style={{ marginBottom: 0 }}>
+            New accounts wait for admin approval before they can do anything.
+          </p>
+        ) : null}
         {error ? (
           <p className="crit" style={{ marginBottom: 0 }}>
             {error}
