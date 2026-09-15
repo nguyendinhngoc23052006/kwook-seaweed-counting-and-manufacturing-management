@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errorMessage } from "../lib/errorMessage";
 import { flush, outbox } from "../lib/outbox";
 import { type DeviceConfig, loadDeviceConfig, type Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
@@ -18,7 +19,10 @@ type FrameScheduler = { requestVideoFrameCallback?: (cb: () => void) => number }
 export default function Capture({ profile }: { profile: Profile }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const counterRef = useRef<LineCounter | null>(null);
+  // When a leaf crosses the line the line itself flashes green until this time.
+  const flashUntilRef = useRef(0);
   const minuteRef = useRef<{ key: string; count: number; frames: number }>({
     key: "",
     count: 0,
@@ -34,7 +38,7 @@ export default function Capture({ profile }: { profile: Profile }) {
   useEffect(() => {
     loadDeviceConfig(profile.id)
       .then(setConfig)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => setError(errorMessage(e)));
   }, [profile.id]);
 
   const persistMinute = useCallback(
@@ -62,6 +66,47 @@ export default function Capture({ profile }: { profile: Profile }) {
     [],
   );
 
+  const drawOverlay = useCallback((w: number, h: number, lineY: number) => {
+    const overlay = overlayRef.current;
+    const video = videoRef.current;
+    if (!overlay || !video) return;
+
+    const rect = video.getBoundingClientRect();
+    if (overlay.width !== rect.width || overlay.height !== rect.height) {
+      overlay.width = rect.width;
+      overlay.height = rect.height;
+    }
+    const ctx = overlay.getContext("2d");
+    if (!ctx) return;
+
+    const sx = overlay.width / w;
+    const sy = overlay.height / h;
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    // Tracks: amber while approaching, filled green once counted.
+    ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+    for (const t of counterRef.current?.activeTracks() ?? []) {
+      ctx.beginPath();
+      ctx.arc(t.cx * sx, t.cy * sy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = t.counted ? "#2e7d5b" : "#cf9134";
+      ctx.fill();
+    }
+
+    // The counting line, drawn last so nothing hides it. It flashes green for a
+    // moment whenever a leaf triggers it.
+    const flashing = performance.now() < flashUntilRef.current;
+    const y = lineY * sy;
+    ctx.strokeStyle = flashing ? "#2e7d5b" : "#ff3b30";
+    ctx.lineWidth = flashing ? 6 : 3;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(overlay.width, y);
+    ctx.stroke();
+
+    ctx.fillStyle = flashing ? "#2e7d5b" : "#ff3b30";
+    ctx.fillText("COUNT LINE  \u25bc direction of travel", 8, y - 8);
+  }, []);
+
   const processFrame = useCallback(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -83,7 +128,12 @@ export default function Capture({ profile }: { profile: Profile }) {
     const mask = binarize(gray, threshold, true);
     const blobs = filterByArea(connectedComponents(mask, w, h), MIN_BLOB_AREA, MAX_BLOB_AREA);
 
+    // The line lives mid-frame whatever the camera's aspect ratio; setLineY
+    // moves it without resetting the tally.
+    const lineY = Math.round(h / 2);
+    counter.setLineY(lineY);
     const newly = counter.update(blobs);
+    if (newly > 0) flashUntilRef.current = performance.now() + 350;
     const minuteKey = `${new Date().toISOString().slice(0, 16)}:00Z`;
     const bucket = minuteRef.current;
 
@@ -97,7 +147,8 @@ export default function Capture({ profile }: { profile: Profile }) {
     bucket.frames += 1;
 
     if (newly > 0) setTotal(counter.stats().counted);
-  }, [config, persistMinute]);
+    drawOverlay(w, h, lineY);
+  }, [config, persistMinute, drawOverlay]);
 
   useEffect(() => {
     if (!running || !config) return;
@@ -146,7 +197,8 @@ export default function Capture({ profile }: { profile: Profile }) {
         await videoRef.current.play();
       }
       counterRef.current = new LineCounter({
-        lineY: 60,
+        lineY: 0, // set every frame to mid-frame once the video's height is known
+
         beltDy: 8,
         gateRadius: 24,
         minTrackAge: 3,
@@ -155,7 +207,7 @@ export default function Capture({ profile }: { profile: Profile }) {
       await navigator.wakeLock?.request("screen").catch(() => undefined);
       setRunning(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }
 
@@ -196,10 +248,16 @@ export default function Capture({ profile }: { profile: Profile }) {
         ) : null}
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <video ref={videoRef} playsInline muted />
-        <canvas ref={canvasRef} style={{ display: "none" }} />
+      <div className="card" style={{ marginTop: 16, padding: 0, overflow: "hidden" }}>
+        <div style={{ position: "relative", lineHeight: 0 }}>
+          <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block" }} />
+          <canvas
+            ref={overlayRef}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          />
+        </div>
       </div>
+      <canvas ref={canvasRef} hidden />
     </div>
   );
 }

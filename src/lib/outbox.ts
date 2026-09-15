@@ -35,6 +35,26 @@ export const outbox = {
   count: () => tx("readonly", (s) => s.count() as IDBRequest<number>),
 };
 
+// Not every rejection is worth the same reaction. A PostgrestError carries a
+// SQLSTATE in .code, which means the SERVER looked at the row and gave a
+// verdict - retrying the identical row cannot change it. No code means the
+// request never got a verdict (offline, timeout), which retrying can fix.
+//
+// 23505 unique_violation is the special case: it means this fact is already
+// recorded. Two phones signed into the same device account both counting the
+// same minute hit `unique (device_id, minute)` - the first writer wins and the
+// loser's row is DELIVERED in every sense that matters, not failed. Before this
+// existed, that loser sat at the head of the queue and blocked every record
+// behind it forever.
+export type FlushVerdict = "delivered" | "poison" | "offline";
+
+export function classifyFlushError(e: unknown): FlushVerdict {
+  const code = e !== null && typeof e === "object" ? (e as { code?: unknown }).code : undefined;
+  if (code === "23505") return "delivered";
+  if (typeof code === "string" && code.length > 0) return "poison";
+  return "offline";
+}
+
 // Records are keyed by a client-generated id and written with upsert, so a
 // retry after a dropped connection can never double-count.
 export async function flush(
@@ -47,8 +67,19 @@ export async function flush(
       await send(record.table, record.payload);
       await outbox.remove(record.id);
       sent++;
-    } catch {
-      break;
+    } catch (e: unknown) {
+      const verdict = classifyFlushError(e);
+      if (verdict === "delivered") {
+        // Another session for this device already wrote this row. The count is
+        // recorded; drop our copy so the queue drains.
+        await outbox.remove(record.id);
+        sent++;
+      } else if (verdict === "poison") {
+      } else {
+        // Offline: the backend is unreachable, so everything behind this
+        // record would fail too. Stop and retry the whole queue later.
+        break;
+      }
     }
   }
   return sent;

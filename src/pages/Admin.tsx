@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../lib/errorMessage";
 import type { DeviceRole, Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
 
@@ -74,7 +75,7 @@ export default function Admin({ profile }: { profile: Profile }) {
 
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(null);
     }

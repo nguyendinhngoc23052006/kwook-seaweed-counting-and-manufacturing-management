@@ -47,7 +47,38 @@ Migrations are the single source of truth. Every schema change is a new file in
 `supabase/migrations/`, UTC-named, append-only. Never hand-edit the database and
 never edit a migration that has been applied.
 
+**Every `create table` must be followed by its `grant`s, in the same migration,
+next to its policies.** RLS filters rows *on top of* a table grant - it does not
+supply one. Supabase's default privileges for the `postgres` role (which is what
+migrations run as) give `anon`/`authenticated` only `TRUNCATE, REFERENCES,
+TRIGGER, MAINTAIN`, so a table created by a migration is unreachable until it is
+granted, and every query against it returns `403 / 42501 permission denied`.
+Tables created in the dashboard behave differently because that path runs as
+`supabase_admin`; do not reason from it.
+
+Grant exactly the commands that have a policy behind them, and nothing to `anon`.
+Do not widen `alter default privileges` to auto-grant future tables: a missing
+grant fails loudly, a missing RLS enable on an auto-granted table leaks silently.
+
+**Verify database changes as the role that will actually run them** - inside a
+transaction, `set local role authenticated` plus `set local request.jwt.claims`,
+then roll back. Querying as `postgres` (the MCP tools, the SQL editor) bypasses
+both grants and RLS, so it can only ever prove the schema exists, never that the
+app can use it.
+
 ## Security
+
+- **Never put a Claude Code session link in a commit message, PR body, or PR
+  comment.** No attribution URLs in anything pushed to this repository.
+- **Public sign-up is off** (`supabase/config.toml`, `[auth] enable_signup`).
+  Accounts are created by an admin, never self-served: with signup on, anyone who
+  found the URL got a profile from the `on_auth_user_created` trigger and could
+  read the tenant's counts and compliance events - and the FIRST account to sign
+  up becomes admin. `config.toml` does not reach production, so production signup
+  is off in the Supabase dashboard instead.
+- **Demo credentials live only in `supabase/seed.sql`**, which Supabase never
+  applies to production and does not apply to persistent branches without an
+  explicit `[remotes.<name>.db.seed]` block. Never seed a real environment.
 
 - Publishable key in the browser, secret key server-only, RLS on every table.
 - The device screen shows only its own station's figures — never totals, never

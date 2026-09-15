@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { errorMessage } from "./lib/errorMessage";
 import { loadProfile, type Profile } from "./lib/session";
 import Admin from "./pages/Admin";
 import Capture from "./pages/Capture";
@@ -15,7 +16,7 @@ export default function App() {
   useEffect(() => {
     loadProfile()
       .then(setProfile)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => setError(errorMessage(e)))
       .finally(() => setLoading(false));
   }, []);
 
