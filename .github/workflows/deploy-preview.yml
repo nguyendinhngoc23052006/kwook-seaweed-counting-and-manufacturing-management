@@ -187,18 +187,19 @@ jobs:
           # this canary read settings 17 seconds after branch creation and saw
           # signup still open. So wait, bounded, for the config to land instead
           # of failing on the race.
+          # Signup is OPEN by design: the gate is the 'pending' role, not the
+          # signup switch, and that invariant is tested end-to-end below.
           SETTINGS=""
           for _ in $(seq 1 18); do   # 18 * 10s = 3 minutes
             SETTINGS=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY" || echo "")
-            if printf '%s' "$SETTINGS" | jq -e '.external.email == true and .disable_signup == true' >/dev/null 2>&1; then
+            if printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null 2>&1; then
               break
             fi
             sleep 10
           done
           printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null 2>&1 \
             || { echo "Email provider is OFF - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq . 2>/dev/null || printf '%s\n' "$SETTINGS"; exit 1; }
-          printf '%s' "$SETTINGS" | jq -e '.disable_signup == true' >/dev/null 2>&1 \
-            || { echo "Public signup is STILL open after 3 minutes - config.toml did not apply to this branch. Settings:"; printf '%s\n' "$SETTINGS" | jq . 2>/dev/null || printf '%s\n' "$SETTINGS"; exit 1; }
+
 
           case "$DB" in
             *isolated*) ;;
@@ -228,5 +229,26 @@ jobs:
           printf '%s' "$ROWS" | jq -e 'type == "array" and length >= 1' >/dev/null \
             || { echo "Authenticated read of profiles returned no rows - grants, RLS or the profile trigger are broken. Body:"; printf '%s\n' "$ROWS"; exit 1; }
 
-          echo "Auth canary passed: sign-in works and an authenticated read returned data."
+          # The open-signup invariant, tested for real: a fresh signup must get
+          # in, land as role 'pending', and be able to read NOTHING else. This
+          # is what makes open signup safe; if it ever breaks, block the merge.
+          JUNK_EMAIL="canary-$(date +%s)-$RANDOM@canary.test"
+          JUNK_PW=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+          PTOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/signup" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$JUNK_EMAIL\",\"password\":\"$JUNK_PW\"}" \
+            | jq -r '.access_token // empty')
+          [ -n "$PTOKEN" ] || { echo "Public signup FAILED - new accounts cannot be created"; exit 1; }
+
+          PROLE=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/profiles?select=role" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN" | jq -r '.[0].role // empty')
+          [ "$PROLE" = "pending" ] || { echo "A fresh signup got role '$PROLE' instead of 'pending' - the approval gate is broken"; exit 1; }
+
+          PROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/count_minutes?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN")
+          printf '%s' "$PROWS" | jq -e 'type == "array" and length == 0' >/dev/null \
+            || { echo "A PENDING account can read tenant data - RLS is broken. Body:"; printf '%s\n' "$PROWS"; exit 1; }
+
+          echo "Auth canary passed: admin sign-in works, and a fresh signup lands pending and sees nothing."
+
 

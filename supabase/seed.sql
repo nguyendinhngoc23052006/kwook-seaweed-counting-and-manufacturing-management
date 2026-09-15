@@ -17,8 +17,8 @@
 --   cam-01 cam-01@kwook.test       demo-kwook-2026   → /capture, counting, Belt 1
 --   cam-02 cam-02@kwook.test       demo-kwook-2026   → /capture, compliance, Main door
 --
--- Order matters: the admin is inserted first because on_auth_user_created makes
--- the first account in the tenant the admin and every later one a viewer.
+-- Roles are set explicitly below; the on_auth_user_created trigger gives every
+-- new account role 'pending' and nothing else.
 
 -- One DO block, not a helper function: Supabase's seed runner PREPARES a batch
 -- of statements before executing it, so a `select seed_user(...)` in the same

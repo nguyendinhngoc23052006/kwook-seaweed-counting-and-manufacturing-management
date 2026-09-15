@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { errorMessage } from "./lib/errorMessage";
 import { loadProfile, type Profile } from "./lib/session";
+import { supabase } from "./lib/supabaseClient";
 import Admin from "./pages/Admin";
 import Capture from "./pages/Capture";
 import Demo from "./pages/Demo";
@@ -33,6 +34,33 @@ export default function App() {
     );
   }
   if (!profile) return <Login />;
+
+  // Signed up but not yet approved. The owner promotes the account by hand in
+  // the Supabase dashboard (Table Editor -> profiles -> role); until then the
+  // database lets this account read nothing but its own row.
+  if (profile.kind === "human" && profile.role === "pending") {
+    return (
+      <div className="wrap" style={{ maxWidth: 420 }}>
+        <div className="card">
+          <h1>Waiting for approval</h1>
+          <p>
+            Account <strong>{profile.display_name}</strong> exists but has not been approved yet.
+            Ask the administrator to approve it, then reload.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            onClick={async () => {
+              await supabase().auth.signOut();
+              window.location.reload();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const home = profile.kind === "device" ? "/capture" : "/wall";
 
