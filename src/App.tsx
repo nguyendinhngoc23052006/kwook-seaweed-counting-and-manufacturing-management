@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { loadProfile, type Profile } from "./lib/session";
 import Admin from "./pages/Admin";
 import Capture from "./pages/Capture";
+import Demo from "./pages/Demo";
 import Login from "./pages/Login";
 import Wall from "./pages/Wall";
 
@@ -17,6 +18,10 @@ export default function App() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, []);
+
+  // The demo is camera-only: no database reads, no writes, no device row. It
+  // renders before the auth gate so the counter can be shown on any phone.
+  if (window.location.pathname === "/demo") return <Demo />;
 
   if (loading) return <div className="wrap">Loading…</div>;
   if (error) {
@@ -36,6 +41,7 @@ export default function App() {
         <Route path="/capture" element={<Capture profile={profile} />} />
         <Route path="/wall" element={<Wall profile={profile} />} />
         <Route path="/admin" element={<Admin profile={profile} />} />
+        <Route path="/demo" element={<Demo />} />
         <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>
     </BrowserRouter>

@@ -1,0 +1,40 @@
+# Copied from the guide's templates/workflows/. Substitute VITE_.
+# main-only projects (Part 0, Q4 = one environment) do not use this file at all.
+name: deploy-staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          # Two different naming systems, on purpose:
+          #   LEFT  = the env name the BUILD reads, always VITE_SUPABASE_*.
+          #   RIGHT = the GitHub repository VARIABLE it reads FROM. Staging points
+          #           at a different Supabase branch than production, so it needs
+          #           its own pair - STAGING_* - set in Part 2 step 7.5. These two
+          #           names are not supposed to match.
+          # Variables, not secrets: a publishable key is browser-visible by design
+          # and lands in the bundle either way.
+          VITE_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
