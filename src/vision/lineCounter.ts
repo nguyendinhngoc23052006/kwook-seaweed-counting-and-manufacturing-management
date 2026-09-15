@@ -102,6 +102,17 @@ export class LineCounter {
     return newlyCounted;
   }
 
+  // The demo moves the line while running; tracks and counts survive the move so
+  // a mid-session nudge does not reset the tally.
+  setLineY(lineY: number): void {
+    this.config = { ...this.config, lineY };
+  }
+
+  // The overlay draws these; the counter itself never needs them back.
+  activeTracks(): ReadonlyArray<{ id: number; cx: number; cy: number; counted: boolean }> {
+    return this.tracks.map((t) => ({ id: t.id, cx: t.cx, cy: t.cy, counted: t.counted }));
+  }
+
   stats(): LineCounterStats {
     return {
       created: this.created,

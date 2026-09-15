@@ -1,0 +1,20 @@
+# Copied from the guide's templates/workflows/. No placeholders.
+# main-only projects (Part 0, Q4 = one environment) do not use this file at all.
+name: gate-main
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  require-staging-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only staging may open a PR into main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "staging" ]; then
+            echo "PRs to main must come from staging. Got: $HEAD_REF"
+            exit 1
+          fi

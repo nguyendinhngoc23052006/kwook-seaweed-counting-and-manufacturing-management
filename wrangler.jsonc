@@ -33,8 +33,16 @@
   "env": {
     // Previews and the staging site are the same Worker under a different name,
     // so a broken staging deploy can never take production's traffic.
+    //
+    // NOT "{repo-name}-staging": a Worker with preview URLs enabled cannot have a
+    // name longer than 54 characters (dashboard-observed 2026-09-15 — enabling
+    // Preview URLs returns "Script name is too long to be used with previews
+    // enabled"). This repo's name is 51 chars, so appending "-staging" gives 59
+    // and previews become impossible — which breaks `canary`, because the health
+    // check has no per-version URL to hit. Only the PRODUCTION Worker name has to
+    // match the repo; this one is free, so it is short on purpose.
     "staging": {
-      "name": "kwook-seaweed-counting-and-manufacturing-management-staging",
+      "name": "kwook-seaweed-counting-staging",
       "preview_urls": true,
       "assets": {
         "directory": "./dist/",
