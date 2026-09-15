@@ -38,3 +38,21 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --env staging
+
+      # The site just shipped with exactly this URL + key baked in, so prove the
+      # database behind it will accept a sign-in. Signup state only WARNS here:
+      # config.toml is confirmed to reach ephemeral preview branches, but not
+      # persistent ones, and a hard assert would fail staging deploys on
+      # unverified platform behavior.
+      - name: Auth canary - staging sign-in must be possible
+        env:
+          SUPA_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          KEY: ${{ vars.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          SETTINGS=$(curl -sS --fail --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY")
+          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null \
+            || { echo "Email provider is OFF on staging - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq .; exit 1; }
+          printf '%s' "$SETTINGS" | jq -e '.disable_signup == true' >/dev/null \
+            || echo "::warning::Public signup is OPEN on the staging branch. Close it in that branch project's dashboard: Authentication -> Providers -> Email -> turn OFF new sign-ups (leave the provider ON)."
+

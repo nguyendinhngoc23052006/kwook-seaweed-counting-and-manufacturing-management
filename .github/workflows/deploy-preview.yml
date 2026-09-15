@@ -23,6 +23,12 @@ jobs:
       pull-requests: write
     outputs:
       preview-url: ${{ steps.upload.outputs.deployment-url }}
+      # For the canary: where this preview's database lives and whether it is
+      # this PR's own isolated branch (seeded demo accounts) or shared staging.
+      # The publishable key is NOT passed as an output - it is masked, and
+      # GitHub silently drops job outputs containing masked values.
+      supabase-url: ${{ steps.supabase.outputs.url }}
+      db: ${{ steps.supabase.outputs.db }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -145,3 +151,63 @@ jobs:
             "$URL/health")
           printf '%s\n' "$BODY"
           printf '%s' "$BODY" | grep -q ok || { echo "health check did not return ok"; exit 1; }
+
+      # /health is a static file; passing it proves Cloudflare served an asset,
+      # not that anyone can use the app. That gap was proven the day the whole
+      # app 403'd on every table with every check green. So the canary also
+      # signs in as the seeded demo admin and performs one authenticated read -
+      # auth config, table grants, RLS and the profile trigger all have to hold
+      # for that to succeed.
+      - name: Auth canary - a real sign-in and a real read
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPA_URL: ${{ needs.deploy-preview.outputs.supabase-url }}
+          DB: ${{ needs.deploy-preview.outputs.db }}
+        run: |
+          set -euo pipefail
+          [ -n "$SUPA_URL" ] || { echo "deploy-preview produced no supabase-url output"; exit 1; }
+
+          # Re-fetch the publishable key (it cannot travel via job outputs, see
+          # above). Same lookup the resolve step uses.
+          REF=$(printf '%s' "$SUPA_URL" | sed -E 's#^https://([^.]+)\..*#\1#')
+          KEYS=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true")
+          pick() {
+            printf '%s' "$KEYS" | jq -r --arg n "$1" \
+              '[(if type == "array" then .[] else empty end)
+                | select(.name == $n)][0].api_key // empty' || echo ""
+          }
+          KEY=$(pick publishable)
+          [ -n "$KEY" ] || KEY=$(pick anon)
+          [ -n "$KEY" ] || { echo "No publishable or anon key on $REF"; exit 1; }
+          echo "::add-mask::$KEY"
+
+          SETTINGS=$(curl -sS --fail --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY")
+          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null \
+            || { echo "Email provider is OFF - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq .; exit 1; }
+          printf '%s' "$SETTINGS" | jq -e '.disable_signup == true' >/dev/null \
+            || { echo "Public signup is OPEN on this preview branch - config.toml did not apply. Settings:"; printf '%s\n' "$SETTINGS" | jq .; exit 1; }
+
+          case "$DB" in
+            *isolated*) ;;
+            *)
+              echo "Database is '$DB' - no seeded demo accounts there, stopping after the settings checks."
+              exit 0
+              ;;
+          esac
+
+          # Credentials from supabase/seed.sql. They exist only on ephemeral
+          # preview branches, which is the only place this block runs.
+          TOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/token?grant_type=password" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" \
+            -d '{"email":"demo-admin@kwook.test","password":"demo-kwook-2026"}' \
+            | jq -r '.access_token // empty')
+          [ -n "$TOKEN" ] || { echo "Password sign-in FAILED for the seeded demo admin"; exit 1; }
+
+          ROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN")
+          printf '%s' "$ROWS" | jq -e 'type == "array" and length >= 1' >/dev/null \
+            || { echo "Authenticated read of profiles returned no rows - grants, RLS or the profile trigger are broken. Body:"; printf '%s\n' "$ROWS"; exit 1; }
+
+          echo "Auth canary passed: sign-in works and an authenticated read returned data."
+
