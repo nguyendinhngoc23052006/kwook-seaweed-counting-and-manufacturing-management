@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errorMessage } from "../lib/errorMessage";
 import { flush, outbox } from "../lib/outbox";
 import { type DeviceConfig, loadDeviceConfig, type Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
@@ -34,7 +35,7 @@ export default function Capture({ profile }: { profile: Profile }) {
   useEffect(() => {
     loadDeviceConfig(profile.id)
       .then(setConfig)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => setError(errorMessage(e)));
   }, [profile.id]);
 
   const persistMinute = useCallback(
@@ -155,7 +156,7 @@ export default function Capture({ profile }: { profile: Profile }) {
       await navigator.wakeLock?.request("screen").catch(() => undefined);
       setRunning(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }
 

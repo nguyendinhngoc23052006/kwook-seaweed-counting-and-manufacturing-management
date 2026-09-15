@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errorMessage } from "../lib/errorMessage";
 import { connectedComponents, filterByArea } from "../vision/connectedComponents";
 import { LineCounter } from "../vision/lineCounter";
 import { close, open } from "../vision/morphology";
@@ -193,11 +194,7 @@ export default function Demo() {
       });
       setRunning(true);
     } catch (e: unknown) {
-      setError(
-        e instanceof Error
-          ? `${e.message} — camera access needs HTTPS (or localhost) and permission.`
-          : String(e),
-      );
+      setError(`${errorMessage(e)} — camera access needs HTTPS (or localhost) and permission.`);
     }
   }
 
