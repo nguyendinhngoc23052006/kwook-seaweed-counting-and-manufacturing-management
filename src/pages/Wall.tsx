@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { functionLabel } from "../lib/functionsCatalog";
 import type { Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
 
@@ -37,7 +38,19 @@ export default function Wall({ profile }: { profile: Profile }) {
     <div className="wrap">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h1 style={{ margin: 0 }}>Wall</h1>
-        <span className="label">{profile.display_name}</span>
+        <div className="row">
+          <span className="label">{profile.display_name}</span>
+          <button
+            type="button"
+            className="secondary"
+            onClick={async () => {
+              await supabase().auth.signOut();
+              window.location.reload();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
       <p className="label">
         Video tiles arrive with the Realtime SFU. Until then this is the fleet health grid.
@@ -51,12 +64,15 @@ export default function Wall({ profile }: { profile: Profile }) {
                 <strong>{d.name}</strong>
                 <span className={`pill ${h.cls}`}>{h.label}</span>
               </div>
-              <div className="label">{d.role}</div>
+              <div className="label">{functionLabel(d.role)}</div>
             </div>
           );
         })}
         {devices.length === 0 ? (
-          <div className="card">No devices yet. Create one in Admin.</div>
+          <div className="card">
+            No cameras yet. Open this site on the camera phone, tap "Use this device as a camera",
+            and scan its QR from Admin.
+          </div>
         ) : null}
       </div>
     </div>

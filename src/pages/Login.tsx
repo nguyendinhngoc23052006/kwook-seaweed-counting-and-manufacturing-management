@@ -69,6 +69,9 @@ export default function Login() {
             New accounts wait for admin approval before they can do anything.
           </p>
         ) : null}
+        <p className="label" style={{ marginBottom: 0 }}>
+          Setting up a camera? <a href="/pair">Use this device as a camera</a> - no account needed.
+        </p>
         {error ? (
           <p className="crit" style={{ marginBottom: 0 }}>
             {error}
