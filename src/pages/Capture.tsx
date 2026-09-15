@@ -221,7 +221,7 @@ export default function Capture({ profile }: { profile: Profile }) {
   if (config.revoked_at) {
     return (
       <div className="wrap">
-        <div className="card crit">This device has been unpaired. Ask an admin to re-pair it.</div>
+        <div className="card crit">This device has been unpaired. Ask the owner to re-pair it.</div>
       </div>
     );
   }

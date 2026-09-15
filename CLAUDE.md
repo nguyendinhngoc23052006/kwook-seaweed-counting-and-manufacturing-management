@@ -76,7 +76,7 @@ app can use it.
   (Table Editor -> profiles -> role). `role_rank()` treats unknown roles as 0,
   so `pending` fails every `is_human_at_least()` policy with no special-casing.
   Nobody EVER becomes admin automatically - the old first-account-becomes-admin
-  bootstrap is deleted; admin is only ever granted in the dashboard. The preview
+  bootstrap is deleted; owner is only ever granted in the dashboard. The preview
   canary proves the invariant on every PR: a fresh signup must land pending and
   see nothing. Signup must be ON in the staging and production dashboards.
 - **Demo credentials live only in `supabase/seed.sql`**, which Supabase never

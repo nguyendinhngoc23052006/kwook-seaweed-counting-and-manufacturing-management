@@ -9,6 +9,7 @@ import Claim from "./pages/Claim";
 import Demo from "./pages/Demo";
 import Login from "./pages/Login";
 import Pair from "./pages/Pair";
+import Scan from "./pages/Scan";
 import Wall from "./pages/Wall";
 
 export default function App() {
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="/wall" element={<Wall profile={profile} />} />
         <Route path="/admin" element={<Admin profile={profile} />} />
         <Route path="/claim" element={<Claim profile={profile} />} />
+        <Route path="/scan" element={<Scan profile={profile} />} />
         <Route path="/demo" element={<Demo />} />
         <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>

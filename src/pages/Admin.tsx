@@ -64,10 +64,10 @@ export default function Admin({ profile }: { profile: Profile }) {
     setBusy(null);
   }
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "owner") {
     return (
       <div className="wrap">
-        <div className="card">Admin access required.</div>
+        <div className="card">Owner access required.</div>
       </div>
     );
   }
@@ -95,9 +95,11 @@ export default function Admin({ profile }: { profile: Profile }) {
       <div className="card">
         <p className="label">
           Pair a new camera: open this site on the camera phone, tap "Use this device as a camera",
-          then scan the QR it shows with your signed-in phone. Unpairing keeps all of a camera's
-          data.
+          then scan its QR here. Unpairing keeps all of a camera's data.
         </p>
+        <a href="/scan">
+          <button type="button">Scan camera QR</button>
+        </a>
         {devices.length === 0 ? (
           <p className="label">No cameras paired yet.</p>
         ) : (
@@ -150,7 +152,7 @@ export default function Admin({ profile }: { profile: Profile }) {
             ))}
             <p className="label" style={{ marginBottom: 0 }}>
               Approve in the Supabase dashboard: Table Editor → profiles → set the account's role
-              from "pending" to viewer / supervisor / manager / admin.
+              from "pending" to viewer / supervisor / manager / owner.
             </p>
           </>
         )}

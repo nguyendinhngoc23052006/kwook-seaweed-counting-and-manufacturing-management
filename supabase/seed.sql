@@ -13,7 +13,7 @@
 -- [remotes.<name>.db.seed] block, which this project does not define — so
 -- staging is not seeded either.
 --
---   admin  demo-admin@kwook.test   demo-kwook-2026   → /wall, /admin
+--   owner  demo-admin@kwook.test   demo-kwook-2026   → /wall, /admin
 --   cam-01 cam-01@kwook.test       demo-kwook-2026   → /capture, counting, Belt 1
 --   cam-02 cam-02@kwook.test       demo-kwook-2026   → /capture, compliance, Main door
 --
@@ -66,7 +66,7 @@ end $$;
 -- Set the intended roles explicitly rather than relying on the order the trigger
 -- saw the inserts in. on_auth_user_created makes the first account an admin, but
 -- the seed should not depend on that to be correct.
-update profiles set kind = 'human', role = 'admin'
+update profiles set kind = 'human', role = 'owner'
  where id = '11111111-1111-1111-1111-111111111111'::uuid;
 
 update profiles
