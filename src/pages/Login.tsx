@@ -4,14 +4,23 @@ import { supabase } from "../lib/supabaseClient";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function signIn(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await supabase().auth.signInWithPassword({ email, password });
+    // New accounts land as 'pending' and can do nothing until the owner
+    // approves them in the Supabase dashboard.
+    const { error } = creating
+      ? await supabase().auth.signUp({
+          email,
+          password,
+          options: { data: { display_name: email.split("@")[0] } },
+        })
+      : await supabase().auth.signInWithPassword({ email, password });
     if (error) setError(error.message);
     else window.location.reload();
     setBusy(false);
@@ -20,7 +29,7 @@ export default function Login() {
   return (
     <div className="wrap" style={{ maxWidth: 380 }}>
       <h1>Kwook Line Vision</h1>
-      <form className="card" onSubmit={signIn}>
+      <form className="card" onSubmit={submit}>
         <div className="label">Account</div>
         <input
           id="email"
@@ -40,7 +49,18 @@ export default function Login() {
           style={{ width: "100%", marginBottom: 12 }}
         />
         <button type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Working…" : creating ? "Create account" : "Sign in"}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          style={{ marginLeft: 8 }}
+          onClick={() => {
+            setCreating(!creating);
+            setError(null);
+          }}
+        >
+          {creating ? "Have an account? Sign in" : "New here? Create account"}
         </button>
         {error ? (
           <p className="crit" style={{ marginBottom: 0 }}>

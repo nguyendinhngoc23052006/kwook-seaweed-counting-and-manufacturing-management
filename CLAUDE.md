@@ -70,12 +70,15 @@ app can use it.
 
 - **Never put a Claude Code session link in a commit message, PR body, or PR
   comment.** No attribution URLs in anything pushed to this repository.
-- **Public sign-up is off** (`supabase/config.toml`, `[auth] enable_signup`).
-  Accounts are created by an admin, never self-served: with signup on, anyone who
-  found the URL got a profile from the `on_auth_user_created` trigger and could
-  read the tenant's counts and compliance events - and the FIRST account to sign
-  up becomes admin. `config.toml` does not reach production, so production signup
-  is off in the Supabase dashboard instead.
+- **Public sign-up is OPEN; the gate is the role.** Every new account lands as
+  `role = 'pending'` (migration `20260915140000`) and can read nothing but its
+  own profile row until the owner promotes it by hand in the Supabase dashboard
+  (Table Editor -> profiles -> role). `role_rank()` treats unknown roles as 0,
+  so `pending` fails every `is_human_at_least()` policy with no special-casing.
+  Nobody EVER becomes admin automatically - the old first-account-becomes-admin
+  bootstrap is deleted; admin is only ever granted in the dashboard. The preview
+  canary proves the invariant on every PR: a fresh signup must land pending and
+  see nothing. Signup must be ON in the staging and production dashboards.
 - **Demo credentials live only in `supabase/seed.sql`**, which Supabase never
   applies to production and does not apply to persistent branches without an
   explicit `[remotes.<name>.db.seed]` block. Never seed a real environment.

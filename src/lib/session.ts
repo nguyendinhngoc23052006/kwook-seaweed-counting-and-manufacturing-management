@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 
 export type DeviceRole = "provisioning" | "counting" | "compliance" | "overview";
-export type HumanRole = "viewer" | "supervisor" | "manager" | "admin";
+export type HumanRole = "pending" | "viewer" | "supervisor" | "manager" | "admin";
 
 export interface Profile {
   id: string;

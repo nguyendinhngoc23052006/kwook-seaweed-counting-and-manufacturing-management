@@ -182,8 +182,10 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = false
+# Signup is OPEN by design: every new account lands as role 'pending' (see
+# migration 20260915140000) and can do nothing until the owner promotes it in
+# the dashboard's Table Editor. The gate is the role, not the signup switch.
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
