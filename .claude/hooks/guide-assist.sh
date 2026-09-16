@@ -3,12 +3,12 @@
 #
 # Copied from the guide's templates/hooks/. No placeholders.
 #
-# The constitution (CLAUDE.md) is in context, but a long session buries it and
-# compaction can drop it. This hook re-injects the governing rule at the moment
-# of the decision it governs, keyed on words in the prompt. Never blocks
-# (exit 0 always); only adds context. Every rule below restates a rule that
-# already exists in this repo's CLAUDE.md — if they disagree, CLAUDE.md wins
-# and this file needs a /refresh from the guide.
+# The constitution (CLAUDE.md) is in context, but a long session can push it
+# far back. This hook re-injects the governing rule at the moment of the
+# decision it governs, keyed on words in the prompt. Never blocks (exit 0
+# always); only adds context. Every rule below restates a rule that already
+# exists in this repo's CLAUDE.md — if they disagree, CLAUDE.md wins and this
+# file needs a /refresh from the guide.
 
 set -u
 
@@ -41,7 +41,7 @@ esac
 # --- PR gate ---------------------------------------------------------------
 case "$lc" in
   *"pull request"*|*"open a pr"*|*"open pr"*|*"one pr"*|*"1 pr"*)
-    add "One PR into the target branch named in CLAUDE.md's Scope, and stop there — never merge or deploy. Write .claude/pr-body.md FIRST with the fully-ticked Self-check; dispatch the three reviewers (each one model tier BELOW yours, model: passed explicitly) and refresh .claude/review/* before opening." ;;
+    add "One PR into the target branch CLAUDE.md's 'Your place + every-PR rules' names, and stop there — never merge or deploy. Write .claude/pr-body.md FIRST with the fully-ticked Self-check; dispatch the three reviewers (each one model tier BELOW yours, model: passed explicitly) and refresh .claude/review/* before opening." ;;
 esac
 
 # --- deploy / production ---------------------------------------------------
