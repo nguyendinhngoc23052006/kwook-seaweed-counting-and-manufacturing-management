@@ -3,10 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import Shell, { atLeast } from "../components/Shell";
 import { coverage, type MinuteRow, perMinuteSeries, ratePerHour, totalFor } from "../lib/counts";
 import { errorMessage } from "../lib/errorMessage";
+import { functionLabel } from "../lib/functionsCatalog";
 import { loadMinutesSince } from "../lib/loadMinutes";
 import type { Profile } from "../lib/session";
 import { kindLabel } from "../lib/stationKinds";
 import { supabase } from "../lib/supabaseClient";
+import { type CaptureSession, loadOpenSessions } from "../services/captureSessions";
 
 const MINUTE_MS = 60_000;
 const WINDOW_MINUTES = 60;
@@ -21,15 +23,25 @@ interface StationRow {
   active: boolean;
 }
 
-interface CameraRow {
+interface DeviceRow {
   id: string;
   name: string;
   last_seen_at: string | null;
 }
 
+// What is recording here right now: an open session and the phone holding it.
+// devices.station_id is only the default that session was pre-filled with, so a
+// phone whose default is another station still shows up here while its session
+// points at this one.
+interface ActiveCamera {
+  session: CaptureSession;
+  device: DeviceRow;
+}
+
 interface Snapshot {
   station: StationRow | null;
-  cameras: CameraRow[];
+  devices: DeviceRow[];
+  sessions: CaptureSession[];
   hour: MinuteRow[];
   today: MinuteRow[];
   truncated: boolean;
@@ -47,24 +59,26 @@ function health(lastSeen: number | null): { label: string; cls: string } {
   return { label: "live", cls: "pill--ok" };
 }
 
-function seenAt(camera: CameraRow): number | null {
-  if (!camera.last_seen_at) return null;
-  const t = new Date(camera.last_seen_at).getTime();
+function seenAt(device: DeviceRow): number | null {
+  if (!device.last_seen_at) return null;
+  const t = new Date(device.last_seen_at).getTime();
   return Number.isNaN(t) ? null : t;
 }
 
 const SEVERITY: Record<string, number> = { "pill--ok": 0, "pill--warn": 1, "pill--crit": 2 };
 
-// A station is only as healthy as its worst camera: one dead camera means
-// counts are missing however well its neighbour is doing. The wall ranks them
-// the same way, so the two screens never disagree about one station.
-function worstHealth(cameras: CameraRow[]): { label: string; cls: string } {
+// A station is only as healthy as its worst recording camera: one dead camera
+// means counts are missing however well its neighbour is doing. With no open
+// session the station is off the line in that instant - the end of a shift is
+// not a fault, so it never ages into "stale". The wall derives it the same way,
+// so the two screens never disagree about one station.
+function stationState(cameras: ActiveCamera[]): { label: string; cls: string } {
   let worst: { label: string; cls: string } | null = null;
   for (const camera of cameras) {
-    const state = health(seenAt(camera));
+    const state = health(seenAt(camera.device));
     if (!worst || (SEVERITY[state.cls] ?? 0) > (SEVERITY[worst.cls] ?? 0)) worst = state;
   }
-  return worst ?? { label: "no camera", cls: "pill--idle" };
+  return worst ?? { label: "off", cls: "pill--idle" };
 }
 
 function hhmm(iso: string): string {
@@ -93,26 +107,25 @@ export default function Station({ profile }: { profile: Profile }) {
 
       const client = supabase();
       try {
-        const [station, cameras, hour, today] = await Promise.all([
+        const [station, devices, openSessions, hour, today] = await Promise.all([
           client
             .from("stations")
             .select("id, name, line, kind, active")
             .eq("id", stationId)
             .maybeSingle(),
-          // A revoked camera cannot write, so its last heartbeat would hold a
-          // dead station at "live" forever. The wall filters them the same way.
-          client
-            .from("devices")
-            .select("id, name, last_seen_at")
-            .eq("station_id", stationId)
-            .is("revoked_at", null)
-            .order("name"),
+          // Every paired phone, not just the ones whose default is this station:
+          // the session decides where a camera is recording, and this read only
+          // supplies the name and heartbeat behind it. A revoked camera cannot
+          // write, so its last heartbeat would hold a dead station at "live"
+          // forever; the wall filters them the same way.
+          client.from("devices").select("id, name, last_seen_at").is("revoked_at", null),
+          loadOpenSessions(),
           loadMinutesSince(fromIso, stationId),
           loadMinutesSince(midnight.toISOString(), stationId),
         ]);
         if (cancelled) return;
 
-        const failed = station.error ?? cameras.error;
+        const failed = station.error ?? devices.error;
         if (failed) {
           // Keep the last good snapshot on screen; a blank wall is worse than a
           // stale one, and the banner says which it is.
@@ -122,7 +135,8 @@ export default function Station({ profile }: { profile: Profile }) {
         setError(null);
         setSnap({
           station: (station.data as StationRow | null) ?? null,
-          cameras: (cameras.data as CameraRow[]) ?? [],
+          devices: (devices.data as DeviceRow[]) ?? [],
+          sessions: openSessions.filter((session) => session.station_id === stationId),
           hour: hour.rows,
           today: today.rows,
           truncated: hour.truncated || today.truncated,
@@ -213,12 +227,19 @@ export default function Station({ profile }: { profile: Profile }) {
     );
   }
 
-  const { station, cameras, hour, today, truncated, fromIso, toIso } = snap;
+  const { station, devices, sessions, hour, today, truncated, fromIso, toIso } = snap;
+  const byId = new Map(devices.map((device) => [device.id, device]));
+  // A session whose device is missing here is one the revoke trigger is closing:
+  // the phone is already cut off, so it is not on the line either.
+  const running = sessions.flatMap<ActiveCamera>((session) => {
+    const device = byId.get(session.device_id);
+    return device ? [{ session, device }] : [];
+  });
   const series = perMinuteSeries(hour, fromIso, toIso);
   const peak = series.reduce((max, point) => Math.max(max, point.count), 0);
   const covered = coverage(hour, WINDOW_MINUTES);
   const reported = Math.round(covered * WINDOW_MINUTES);
-  const stationHealth = worstHealth(cameras);
+  const state = stationState(running);
 
   return (
     <Shell profile={profile} active="wall">
@@ -239,110 +260,105 @@ export default function Station({ profile }: { profile: Profile }) {
           </div>
           <div className="row">
             <span className="pill pill--idle">{kindLabel(station.kind)}</span>
-            <span className={`pill ${stationHealth.cls}`}>{stationHealth.label}</span>
+            <span className={`pill ${state.cls}`}>{state.label}</span>
           </div>
         </div>
 
-        {cameras.length === 0 ? (
+        {running.length === 0 ? (
           <div className="empty">
-            <h2 className="empty__title">No cameras on this station yet</h2>
+            <h2 className="empty__title">No camera is recording here</h2>
             <p className="empty__body">
-              Nothing is counting here. Pair a camera phone and assign it to this station, then the
-              figures start filling in on their own.
+              A camera belongs to this station only while a session is running, so signing one off
+              takes it off the line at once. The figures below are what earlier sessions left
+              behind.
             </p>
             <Link className="btn btn--primary" to="/admin">
-              Pair a camera
+              Open Cameras
             </Link>
           </div>
         ) : (
-          <>
-            <div className="grid">
-              <div className="card">
-                <div className="stack">
-                  <div className="label">Today</div>
-                  <div className="figure figure--lg">
-                    {totalFor(today).toLocaleString()}
-                    <span className="unit">leaves</span>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="stack">
-                  <div className="label">Last hour</div>
-                  <div className="figure">
-                    {totalFor(hour).toLocaleString()}
-                    <span className="unit">leaves</span>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="stack">
-                  <div className="label">Per hour now</div>
-                  <div className="figure">
-                    {Math.round(ratePerHour(hour)).toLocaleString()}
-                    <span className="unit">/h</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="row">
-              <span className={covered < 0.9 ? "pill pill--warn" : "pill pill--idle"}>
-                Reported {reported} of the last {WINDOW_MINUTES} minutes.
-              </span>
-              {covered < 0.9 ? (
-                <span className="muted">
-                  The figures above cover only the minutes that reported.
+          <div className="row">
+            {running.map(({ session, device }) => {
+              const beat = health(seenAt(device));
+              return (
+                <span className={`pill ${beat.cls}`} key={session.id}>
+                  {device.name} · {functionLabel(session.camera_function)} · since{" "}
+                  {hhmm(session.started_at)} · {beat.label}
                 </span>
-              ) : null}
-            </div>
-
-            <div className="section">
-              <div className="section__head">
-                <h2 className="section__title">Last {WINDOW_MINUTES} minutes</h2>
-                <span className="muted">
-                  {hhmm(fromIso)} - {hhmm(toIso)} · peak {peak.toLocaleString()}/min
-                </span>
-              </div>
-              {/* Every bar's geometry is computed from the data, which is the one
-                  thing a class cannot carry. Colour still comes from the class:
-                  the fill is currentColor. */}
-              <div className="card card--flush">
-                {series.map((point) => (
-                  <div
-                    key={point.minute}
-                    className={point.count > 0 ? "ok" : "muted"}
-                    title={`${hhmm(point.minute)} · ${point.count}`}
-                    style={{
-                      display: "inline-block",
-                      verticalAlign: "bottom",
-                      background: "currentColor",
-                      width: `${100 / series.length}%`,
-                      height:
-                        peak > 0 && point.count > 0
-                          ? `${Math.max(3, Math.round((point.count / peak) * STRIP_PX))}px`
-                          : "2px",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="section">
-              <h2 className="section__title">Cameras</h2>
-              <div className="row">
-                {cameras.map((camera) => {
-                  const cameraHealth = health(seenAt(camera));
-                  return (
-                    <span className={`pill ${cameraHealth.cls}`} key={camera.id}>
-                      {camera.name} · {cameraHealth.label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          </>
+              );
+            })}
+          </div>
         )}
+
+        <div className="grid">
+          <div className="card">
+            <div className="stack">
+              <div className="label">Today</div>
+              <div className="figure figure--lg">
+                {totalFor(today).toLocaleString()}
+                <span className="unit">leaves</span>
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="stack">
+              <div className="label">Last hour</div>
+              <div className="figure">
+                {totalFor(hour).toLocaleString()}
+                <span className="unit">leaves</span>
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="stack">
+              <div className="label">Per hour now</div>
+              <div className="figure">
+                {Math.round(ratePerHour(hour)).toLocaleString()}
+                <span className="unit">/h</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="row">
+          <span className={covered < 0.9 ? "pill pill--warn" : "pill pill--idle"}>
+            Reported {reported} of the last {WINDOW_MINUTES} minutes.
+          </span>
+          {covered < 0.9 ? (
+            <span className="muted">The figures above cover only the minutes that reported.</span>
+          ) : null}
+        </div>
+
+        <div className="section">
+          <div className="section__head">
+            <h2 className="section__title">Last {WINDOW_MINUTES} minutes</h2>
+            <span className="muted">
+              {hhmm(fromIso)} - {hhmm(toIso)} · peak {peak.toLocaleString()}/min
+            </span>
+          </div>
+          {/* Every bar's geometry is computed from the data, which is the one
+              thing a class cannot carry. Colour still comes from the class:
+              the fill is currentColor. */}
+          <div className="card card--flush">
+            {series.map((point) => (
+              <div
+                key={point.minute}
+                className={point.count > 0 ? "ok" : "muted"}
+                title={`${hhmm(point.minute)} · ${point.count}`}
+                style={{
+                  display: "inline-block",
+                  verticalAlign: "bottom",
+                  background: "currentColor",
+                  width: `${100 / series.length}%`,
+                  height:
+                    peak > 0 && point.count > 0
+                      ? `${Math.max(3, Math.round((point.count / peak) * STRIP_PX))}px`
+                      : "2px",
+                }}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </Shell>
   );

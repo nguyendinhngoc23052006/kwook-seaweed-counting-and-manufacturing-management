@@ -10,7 +10,8 @@
 import type { MinuteRow } from "./counts";
 import { supabase } from "./supabaseClient";
 
-const COLUMNS = "minute, count, device_id, achieved_fps, tracks_created, tracks_counted";
+const COLUMNS =
+  "minute, count, device_id, station_id, achieved_fps, tracks_created, tracks_counted";
 const PAGE = 1000;
 const MAX_PAGES = 50;
 
