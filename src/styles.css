@@ -397,7 +397,11 @@ table td {
 }
 .btn--ghost {
   background: transparent;
-  border-color: transparent;
+  /* A visible edge, not bare text: every ghost button in this app is a real
+     secondary action (Cancel, Sign out, Back to cameras, "Use this device as a
+     camera"). With a transparent border they read as links, and the sign-in
+     screen becomes three stacked blue phrases with no hierarchy. */
+  border-color: var(--rule);
   color: var(--accent);
 }
 .btn--danger {
