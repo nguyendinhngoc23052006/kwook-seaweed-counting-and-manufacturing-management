@@ -47,7 +47,12 @@ export default function Scan({ profile }: { profile: Profile }) {
   if (profile.role !== "owner") {
     return (
       <div className="wrap">
-        <div className="card">Owner access required.</div>
+        <div className="empty">
+          <h2 className="empty__title">Owner access required</h2>
+          <p className="empty__body">
+            Scanning a pairing code creates a camera account, so only an owner can do it.
+          </p>
+        </div>
       </div>
     );
   }
@@ -70,22 +75,31 @@ export default function Scan({ profile }: { profile: Profile }) {
   }
 
   return (
-    <div className="wrap" style={{ maxWidth: 480 }}>
-      <h1>Scan a camera's QR</h1>
-      <p className="label">
-        Point this phone at the QR shown on the device that wants to become a camera. The pairing
-        form opens by itself.
-      </p>
-      {error ? <div className="card crit">{error}</div> : null}
-      {!running ? (
-        <button type="button" onClick={start}>
-          Start scanning
-        </button>
-      ) : null}
-      <div className="card" style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
-        <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block" }} />
+    <div className="wrap">
+      <div className="stack">
+        <h1 className="h1">Scan a camera's QR</h1>
+        <p className="muted">
+          Point this phone at the QR shown on the device that wants to become a camera. The pairing
+          form opens by itself.
+        </p>
+
+        {error ? (
+          <div className="banner banner--crit" role="alert">
+            {error}
+          </div>
+        ) : null}
+
+        {!running ? (
+          <button type="button" className="btn btn--primary btn--block" onClick={start}>
+            Start scanning
+          </button>
+        ) : null}
+
+        <div className="card card--flush stack">
+          <video ref={videoRef} playsInline muted />
+        </div>
+        <canvas ref={canvasRef} hidden />
       </div>
-      <canvas ref={canvasRef} hidden />
     </div>
   );
 }

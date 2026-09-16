@@ -4,6 +4,7 @@ import { functionLabel } from "../lib/functionsCatalog";
 import { flush, outbox } from "../lib/outbox";
 import { type DeviceConfig, loadDeviceConfig, type Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
+import { useOnline } from "../lib/useOnline";
 import { connectedComponents, filterBlobs } from "../vision/connectedComponents";
 import { LineCounter } from "../vision/lineCounter";
 import { close, open } from "../vision/morphology";
@@ -38,12 +39,24 @@ export default function Capture({ profile }: { profile: Profile }) {
   const [total, setTotal] = useState(0);
   const [queued, setQueued] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const online = useOnline();
 
   useEffect(() => {
     loadDeviceConfig(profile.id)
       .then(setConfig)
       .catch((e: unknown) => setError(errorMessage(e)));
   }, [profile.id]);
+
+  // The outbox outlives the page, so what is waiting has to be read from it at
+  // startup: a phone reopened after a night offline would otherwise say "synced"
+  // while its queue sat on disk. A failed read leaves the pill alone rather than
+  // replacing the counting screen with an error.
+  useEffect(() => {
+    outbox
+      .count()
+      .then(setQueued)
+      .catch(() => undefined);
+  }, []);
 
   const persistMinute = useCallback(
     async (device: DeviceConfig, minuteKey: string, count: number, frames: number) => {
@@ -236,62 +249,157 @@ export default function Capture({ profile }: { profile: Profile }) {
     setRunning(false);
   }
 
-  if (error)
+  if (!config)
     return (
       <div className="wrap">
-        <div className="card crit">{error}</div>
+        <div className="stack">
+          {error ? (
+            <div className="banner banner--crit" role="alert">
+              {error}
+            </div>
+          ) : (
+            <span className="skeleton">Loading this camera</span>
+          )}
+          <SignOutFooter />
+        </div>
       </div>
     );
-  if (!config) return <div className="wrap">Loading device…</div>;
   if (config.revoked_at) {
     return (
       <div className="wrap">
-        <div className="card crit">This device has been unpaired. Ask the owner to re-pair it.</div>
+        <div className="stack">
+          <div className="empty">
+            <h2 className="empty__title">This camera has been unpaired</h2>
+            <p className="empty__body">
+              It has stopped counting. Everything it already sent is kept. An owner can pair this
+              phone again, or sign out to use it normally.
+            </p>
+          </div>
+          <SignOutFooter />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="wrap">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <strong>{config.name}</strong>
-          <div className="label">{functionLabel(config.role)}</div>
-        </div>
-        <span className={queued > 0 ? "pill warn" : "pill ok"}>
-          {queued > 0 ? `${queued} queued` : "synced"}
+    <div className="app">
+      <header className="appbar">
+        <span className="appbar__brand">{config.name}</span>
+        <span className="muted">{functionLabel(config.role)}</span>
+        <span className="appbar__spacer" />
+        <span className={online && queued === 0 ? "pill pill--ok" : "pill pill--warn"}>
+          {syncLabel(online, queued)}
         </span>
-      </div>
+      </header>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="label">Counted this session</div>
-        <div className="figure">{total}</div>
-        <div className="row" style={{ marginTop: 8 }}>
-          {!running ? (
-            <button type="button" onClick={start}>
-              Start counting
-            </button>
-          ) : (
-            <>
-              <span className="pill ok">● counting</span>
-              <button type="button" className="secondary" onClick={stop}>
-                Stop
+      <main className="wrap">
+        <div className="stack">
+          {/* A camera error is recoverable — a denied permission can be granted and a busy
+              device frees up — so it never replaces the screen it would strand. */}
+          {error ? (
+            <div className="banner banner--crit" role="alert">
+              <span>{error}</span>
+              <button type="button" className="btn btn--primary" onClick={start}>
+                Try again
               </button>
-            </>
+            </div>
+          ) : null}
+          {online ? null : (
+            <div className="banner banner--warn">
+              Offline. Counting carries on and every minute is saved on this phone; it syncs by
+              itself when the connection returns.
+            </div>
           )}
-        </div>
-      </div>
+          {online && queued > 0 ? (
+            <div className="banner banner--info">
+              {queued} {queued === 1 ? "minute is" : "minutes are"} still waiting to sync. They are
+              saved on this phone and go out on the next sync — nothing is lost.
+            </div>
+          ) : null}
+          {config.station_id ? null : (
+            <div className="banner banner--warn">
+              No station assigned — these counts will not appear on the wall.
+            </div>
+          )}
 
-      <div className="card" style={{ marginTop: 16, padding: 0, overflow: "hidden" }}>
-        <div style={{ position: "relative", lineHeight: 0 }}>
-          <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block" }} />
-          <canvas
-            ref={overlayRef}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-          />
+          <div className="card stack">
+            <div>
+              <div className="label">Counted this session</div>
+              <div className="figure">{total}</div>
+            </div>
+            <div className="row">
+              {running ? (
+                <>
+                  <span className="pill pill--ok">● counting</span>
+                  <button type="button" className="btn" onClick={stop}>
+                    Stop
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn btn--primary" onClick={start}>
+                  Start counting
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="card card--flush">
+            {/* The overlay has to sit exactly on the video box, and no class in the design
+                system can express that. */}
+            <div style={{ position: "relative", lineHeight: 0 }}>
+              <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block" }} />
+              <canvas
+                ref={overlayRef}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+              />
+            </div>
+          </div>
+
+          <SignOutFooter />
         </div>
-      </div>
+      </main>
       <canvas ref={canvasRef} hidden />
     </div>
+  );
+}
+
+function syncLabel(isOnline: boolean, queued: number): string {
+  if (!isOnline) return queued > 0 ? `offline · ${queued} queued` : "offline";
+  return queued > 0 ? `${queued} queued` : "synced";
+}
+
+// This screen carries no navigation on purpose, so a phone paired as a camera by
+// mistake has no other way back to the sign-in screen. Reloading is what drops
+// the device session, and the page teardown releases the camera with it.
+async function signOut() {
+  await supabase().auth.signOut();
+  window.location.reload();
+}
+
+function SignOutFooter() {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <footer className="row">
+      {confirming ? (
+        <div className="banner banner--warn">
+          <span>This phone will stop counting and return to the sign-in screen.</span>
+          <button type="button" className="btn btn--danger" onClick={() => void signOut()}>
+            Sign out
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={() => setConfirming(false)}>
+            Keep counting
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setConfirming(true)}
+        >
+          This is not a camera — sign out
+        </button>
+      )}
+    </footer>
   );
 }

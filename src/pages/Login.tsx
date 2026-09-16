@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 export default function Login() {
+  const formId = useId();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -12,72 +14,104 @@ export default function Login() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    // New accounts land as 'pending' and can do nothing until the owner
-    // approves them in the Supabase dashboard.
-    const { error } = creating
-      ? await supabase().auth.signUp({
-          email,
-          password,
-          options: { data: { display_name: email.split("@")[0] } },
-        })
-      : await supabase().auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    else window.location.reload();
+    if (creating) {
+      // handle_new_user() reads raw_user_meta_data->>'display_name'; the key name
+      // is a database contract, not a label.
+      const { error } = await supabase().auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: email.split("@")[0] } },
+      });
+      if (error) setError(error.message);
+      else setCreated(true);
+    } else {
+      const { error } = await supabase().auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else window.location.reload();
+    }
     setBusy(false);
   }
 
   return (
-    <div className="wrap" style={{ maxWidth: 380 }}>
-      <h1>Kwook Line Vision</h1>
-      <form className="card" onSubmit={submit}>
-        <div className="label">Account</div>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          autoComplete="username"
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ width: "100%", marginBottom: 8 }}
-        />
-        <div className="label">Password</div>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ width: "100%", marginBottom: 12 }}
-        />
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button type="submit" disabled={busy} style={{ width: "100%" }}>
-            {busy ? "Working…" : creating ? "Create account" : "Sign in"}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            style={{ width: "100%" }}
-            onClick={() => {
-              setCreating(!creating);
-              setError(null);
-            }}
-          >
-            {creating ? "Have an account? Sign in" : "New here? Create account"}
-          </button>
-        </div>
-        {creating ? (
-          <p className="label" style={{ marginBottom: 0 }}>
-            New accounts wait for the owner to approve them before they can do anything.
-          </p>
-        ) : null}
-        <p className="label" style={{ marginBottom: 0 }}>
-          Setting up a camera? <a href="/pair">Use this device as a camera</a> - no account needed.
-        </p>
+    <div className="wrap">
+      <div className="stack">
+        <h1 className="h1">Kwook Line Vision</h1>
+
         {error ? (
-          <p className="crit" style={{ marginBottom: 0 }}>
+          <div className="banner banner--crit" role="alert">
             {error}
-          </p>
+          </div>
         ) : null}
-      </form>
+
+        {created ? (
+          <div className="banner banner--info">
+            Account created. It can do nothing until an owner approves it — ask them to, then sign
+            in.
+          </div>
+        ) : null}
+
+        <div className="card">
+          <form className="stack" onSubmit={submit}>
+            <div className="field">
+              <label className="field__label" htmlFor={`${formId}-email`}>
+                Account
+              </label>
+              <input
+                id={`${formId}-email`}
+                className="field__input"
+                type="email"
+                value={email}
+                autoComplete="username"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <label className="field__label" htmlFor={`${formId}-password`}>
+                Password
+              </label>
+              <input
+                id={`${formId}-password`}
+                className="field__input"
+                type="password"
+                value={password}
+                autoComplete={creating ? "new-password" : "current-password"}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+
+            <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
+              {busy ? <span className="spinner" /> : null}
+              {busy
+                ? creating
+                  ? "Creating account…"
+                  : "Signing in…"
+                : creating
+                  ? "Create account"
+                  : "Sign in"}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn--ghost btn--block"
+              onClick={() => {
+                setCreating(!creating);
+                setError(null);
+                setCreated(false);
+              }}
+            >
+              {creating ? "Have an account? Sign in" : "New here? Create account"}
+            </button>
+          </form>
+        </div>
+
+        <a className="btn btn--ghost btn--block" href="/pair">
+          Use this device as a camera
+        </a>
+        <p className="muted">
+          Setting up a camera needs no account — an owner approves it from their own phone.
+        </p>
+      </div>
     </div>
   );
 }

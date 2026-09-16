@@ -52,17 +52,31 @@ export default function Pair() {
   }, []);
 
   return (
-    <div className="wrap" style={{ maxWidth: 420, textAlign: "center" }}>
-      <h1>Pair this camera</h1>
-      <p className="label">
-        Ask the owner to scan this code with their signed-in phone. This screen switches to the
-        camera view by itself once approved.
-      </p>
-      {error ? <div className="card crit">{error}</div> : null}
-      <div className="card" style={{ display: "inline-block", background: "#fff", padding: 12 }}>
-        <canvas ref={canvasRef} />
+    <div className="wrap">
+      <div className="stack">
+        <h1 className="h1">Pair this camera</h1>
+        <p className="muted">
+          Ask the owner to scan this code with their signed-in phone. This screen switches to the
+          camera view by itself once approved.
+        </p>
+
+        {error ? (
+          <div className="banner banner--crit" role="alert">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="card">
+          <canvas ref={canvasRef} />
+        </div>
+
+        <div className="row">
+          <span className="spinner" />
+          <span className="muted">
+            {status === "waiting" ? "Waiting for the owner…" : "Signing in…"}
+          </span>
+        </div>
       </div>
-      <p className="label">{status === "waiting" ? "Waiting for the owner…" : "Signing in…"}</p>
     </div>
   );
 }
