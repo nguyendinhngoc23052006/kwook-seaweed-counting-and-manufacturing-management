@@ -5,11 +5,11 @@ import { errorMessage } from "../lib/errorMessage";
 import { functionLabel } from "../lib/functionsCatalog";
 import type { HumanRole, Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
+import { type CaptureSession, endSession, loadOpenSessions } from "../services/captureSessions";
 
 interface DeviceRow {
   id: string;
   name: string;
-  role: string;
   station_id: string | null;
   revoked_at: string | null;
 }
@@ -40,6 +40,15 @@ const ACCESS_ROLES: HumanRole[] = ["pending", ...APPROVAL_ROLES];
 
 const LADDER_HINT =
   "Viewer sees the wall. Supervisor also sees who else has an account. Manager also edits stations. Owner also pairs cameras and approves people.";
+
+const RECORDING_HINT =
+  "End session takes this camera off the line now - the phone stays paired and can start recording again. Unpairing cuts the phone off permanently in the database and keeps every count it ever wrote.";
+const IDLE_HINT =
+  "Unpairing cuts this phone off permanently in the database and keeps every count it ever wrote.";
+
+function hhmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 function RoleSelect({
   id,
@@ -86,6 +95,7 @@ export default function Admin({ profile }: { profile: Profile }) {
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [stations, setStations] = useState<StationRow[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
+  const [sessions, setSessions] = useState<CaptureSession[]>([]);
   const [drafts, setDrafts] = useState<Record<string, HumanRole>>({});
   const [confirmOwnerId, setConfirmOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,24 +106,31 @@ export default function Admin({ profile }: { profile: Profile }) {
   const isOwner = profile.role === "owner";
 
   const refresh = useCallback(async () => {
-    const [d, s, p] = await Promise.all([
-      supabase().from("devices").select("id, name, role, station_id, revoked_at").order("name"),
-      supabase().from("stations").select("id, name, active").order("name"),
-      supabase()
-        .from("profiles")
-        .select("id, display_name, role, created_at")
-        .eq("kind", "human")
-        .order("display_name"),
-    ]);
-    const failed = d.error ?? s.error ?? p.error;
-    if (failed) {
-      setError(errorMessage(failed));
-      return;
+    try {
+      const [d, s, p, openSessions] = await Promise.all([
+        supabase().from("devices").select("id, name, station_id, revoked_at").order("name"),
+        supabase().from("stations").select("id, name, active").order("name"),
+        supabase()
+          .from("profiles")
+          .select("id, display_name, role, created_at")
+          .eq("kind", "human")
+          .order("display_name"),
+        loadOpenSessions(),
+      ]);
+      const failed = d.error ?? s.error ?? p.error;
+      if (failed) {
+        setError(errorMessage(failed));
+        return;
+      }
+      setError(null);
+      setDevices((d.data as DeviceRow[]) ?? []);
+      setStations((s.data as StationRow[]) ?? []);
+      setPeople((p.data as PersonRow[]) ?? []);
+      setSessions(openSessions);
+    } catch (failure) {
+      // loadOpenSessions throws where the three queries return their error in-band.
+      setError(errorMessage(failure));
     }
-    setError(null);
-    setDevices((d.data as DeviceRow[]) ?? []);
-    setStations((s.data as StationRow[]) ?? []);
-    setPeople((p.data as PersonRow[]) ?? []);
   }, []);
 
   useEffect(() => {
@@ -182,6 +199,7 @@ export default function Admin({ profile }: { profile: Profile }) {
   // Unpair keeps every row the camera ever wrote - it only cuts the phone off
   // (revoked_at blocks its writes in the database itself). There is
   // deliberately NO delete: deleting a device would cascade into its history.
+  // The database trigger ends any open session, so this only re-reads after.
   async function setRevoked(id: string, revoked: boolean) {
     setBusy(id);
     const { error: writeError } = await supabase()
@@ -196,6 +214,22 @@ export default function Admin({ profile }: { profile: Profile }) {
     await refresh();
     setBusy(null);
     showToast(revoked ? "Camera unpaired." : "Camera re-activated.");
+  }
+
+  // The other half of "remove a camera": this takes it off the line in that
+  // instant and leaves the phone paired, free to start a new session.
+  async function endOpenSession(device: DeviceRow, session: CaptureSession) {
+    setBusy(device.id);
+    try {
+      await endSession(session.id, "ended_by_owner");
+    } catch (failure) {
+      setError(errorMessage(failure));
+      setBusy(null);
+      return;
+    }
+    await refresh();
+    setBusy(null);
+    showToast(`${device.name} is off the line - it stays paired.`);
   }
 
   async function assignStation(device: DeviceRow, stationId: string | null) {
@@ -214,8 +248,8 @@ export default function Admin({ profile }: { profile: Profile }) {
     setBusy(null);
     showToast(
       target
-        ? `${device.name} now counts for ${target.name}.`
-        : `${device.name} has no station - its counts stay off the wall.`,
+        ? `${device.name} starts at ${target.name} the next time it records.`
+        : `${device.name} has no default station - its next session starts with none.`,
     );
   }
 
@@ -238,6 +272,9 @@ export default function Admin({ profile }: { profile: Profile }) {
   // assignment is never silently dropped by the filter.
   const stationChoices = (current: string | null) =>
     stations.filter((s) => s.active || s.id === current);
+  const sessionByDevice = new Map(sessions.map((s) => [s.device_id, s]));
+  const stationName = (id: string | null) =>
+    stations.find((s) => s.id === id)?.name ?? "no station";
   const pending = people.filter((p) => p.role === "pending");
   const approved = people.filter((p) => p.role !== "pending");
 
@@ -460,8 +497,8 @@ export default function Admin({ profile }: { profile: Profile }) {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Function</th>
-                    <th>Station</th>
+                    <th>Recording now</th>
+                    <th>Default station</th>
                     <th>Status</th>
                     <th>
                       <span className="sr-only">Action</span>
@@ -469,51 +506,88 @@ export default function Admin({ profile }: { profile: Profile }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((d) => (
-                    <tr key={d.id}>
-                      <td data-label="Name">{d.name}</td>
-                      <td data-label="Function">{functionLabel(d.role)}</td>
-                      <td data-label="Station">
-                        <div className="field">
-                          <select
-                            className="field__input"
-                            aria-label={`Station for ${d.name}`}
-                            value={d.station_id ?? ""}
-                            disabled={noStations || busy === d.id}
-                            onChange={(e) => assignStation(d, e.target.value || null)}
-                          >
-                            <option value="">— no station —</option>
-                            {stationChoices(d.station_id).map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.active ? s.name : `${s.name} (inactive)`}
-                              </option>
-                            ))}
-                          </select>
-                          {noStations ? (
-                            <span className="field__hint">
-                              <Link to="/stations">Create a station</Link> first - a camera with no
-                              station never reaches the wall.
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td data-label="Status">
-                        <span className={d.revoked_at ? "pill pill--crit" : "pill pill--ok"}>
-                          {d.revoked_at ? "unpaired" : "paired"}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={busy === d.id}
-                          onClick={() => setRevoked(d.id, !d.revoked_at)}
-                        >
-                          {d.revoked_at ? "Re-activate" : "Unpair"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {devices.map((d) => {
+                    const session = sessionByDevice.get(d.id);
+                    const actionHint = session ? RECORDING_HINT : IDLE_HINT;
+                    return (
+                      <tr key={d.id}>
+                        <td data-label="Name">{d.name}</td>
+                        <td data-label="Recording now">
+                          {session ? (
+                            <div className="field">
+                              <span>{functionLabel(session.camera_function)}</span>
+                              <span className="field__hint">
+                                {stationName(session.station_id)} · since {hhmm(session.started_at)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="pill pill--idle">not recording</span>
+                          )}
+                        </td>
+                        <td data-label="Default station">
+                          <div className="field">
+                            <select
+                              className="field__input"
+                              aria-label={`Default station for ${d.name}`}
+                              value={d.station_id ?? ""}
+                              disabled={noStations || busy === d.id}
+                              onChange={(e) => assignStation(d, e.target.value || null)}
+                            >
+                              <option value="">— no station —</option>
+                              {stationChoices(d.station_id).map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.active ? s.name : `${s.name} (inactive)`}
+                                </option>
+                              ))}
+                            </select>
+                            {noStations ? (
+                              <span className="field__hint">
+                                <Link to="/stations">Create a station</Link> first - a camera with
+                                no station never reaches the wall.
+                              </span>
+                            ) : (
+                              <span className="field__hint">
+                                Pre-fills the camera's next session. It does not move a camera that
+                                is recording now.
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td data-label="Status">
+                          <span className={d.revoked_at ? "pill pill--crit" : "pill pill--ok"}>
+                            {d.revoked_at ? "unpaired" : "paired"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="field">
+                            <div className="row">
+                              {session ? (
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost"
+                                  disabled={busy === d.id}
+                                  onClick={() => endOpenSession(d, session)}
+                                >
+                                  End session
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={busy === d.id}
+                                onClick={() => setRevoked(d.id, !d.revoked_at)}
+                              >
+                                {d.revoked_at ? "Re-activate" : "Unpair"}
+                              </button>
+                            </div>
+                            {d.revoked_at ? null : (
+                              <span className="field__hint">{actionHint}</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

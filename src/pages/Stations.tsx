@@ -2,23 +2,21 @@ import { type FormEvent, useCallback, useEffect, useId, useState } from "react";
 import Shell, { atLeast } from "../components/Shell";
 import { errorMessage } from "../lib/errorMessage";
 import type { Profile } from "../lib/session";
-import { kindLabel, STATION_KINDS } from "../lib/stationKinds";
+import { KIND_SUGGESTIONS, kindLabel } from "../lib/stationKinds";
 import { supabase } from "../lib/supabaseClient";
-
-type StationKind = "provisioning" | "counting" | "compliance" | "overview";
 
 interface StationRow {
   id: string;
   name: string;
   line: string;
-  kind: StationKind;
+  kind: string;
   active: boolean;
 }
 
 interface Draft {
   name: string;
   line: string;
-  kind: StationKind;
+  kind: string;
   active: boolean;
 }
 
@@ -36,6 +34,7 @@ function StationFields({
   idBase,
   draft,
   lines,
+  kinds,
   attempted,
   disabled,
   onChange,
@@ -43,11 +42,13 @@ function StationFields({
   idBase: string;
   draft: Draft;
   lines: string[];
+  kinds: string[];
   attempted: boolean;
   disabled: boolean;
   onChange: (next: Draft) => void;
 }) {
   const listId = `${idBase}-lines`;
+  const kindListId = `${idBase}-kinds`;
   const nameMissing = attempted && draft.name.trim().length === 0;
   const lineMissing = attempted && draft.line.trim().length === 0;
 
@@ -94,21 +95,22 @@ function StationFields({
 
       <div className="field">
         <label className="field__label" htmlFor={`${idBase}-kind`}>
-          What it watches
+          Kind of place
         </label>
-        <select
+        <input
           id={`${idBase}-kind`}
           className="field__input"
+          list={kindListId}
           value={draft.kind}
           disabled={disabled}
-          onChange={(e) => onChange({ ...draft, kind: e.target.value as StationKind })}
-        >
-          {STATION_KINDS.map((k) => (
-            <option key={k.value} value={k.value}>
-              {k.label}
-            </option>
+          onChange={(e) => onChange({ ...draft, kind: e.target.value })}
+        />
+        <datalist id={kindListId}>
+          {kinds.map((kind) => (
+            <option key={kind} value={kind} />
           ))}
-        </select>
+        </datalist>
+        <span className="field__hint">What this place is called on your floor. Optional.</span>
       </div>
 
       <div className="field field--inline">
@@ -140,7 +142,7 @@ export default function Stations({ profile }: { profile: Profile }) {
   const [addDraft, setAddDraft] = useState<Draft>({
     name: "",
     line: "",
-    kind: "counting",
+    kind: "",
     active: true,
   });
   const [addAttempted, setAddAttempted] = useState(false);
@@ -190,6 +192,7 @@ export default function Stations({ profile }: { profile: Profile }) {
     setAddAttempted(true);
     const name = addDraft.name.trim();
     const line = addDraft.line.trim();
+    const kind = addDraft.kind.trim();
     if (!name || !line) return;
 
     setBusy("new");
@@ -199,7 +202,7 @@ export default function Stations({ profile }: { profile: Profile }) {
       tenant_id: profile.tenant_id,
       name,
       line,
-      kind: addDraft.kind,
+      kind,
       active: addDraft.active,
     });
     if (writeError) {
@@ -208,7 +211,7 @@ export default function Stations({ profile }: { profile: Profile }) {
       return;
     }
     // The line is kept: stations are added a line at a time.
-    setAddDraft({ name: "", line, kind: addDraft.kind, active: true });
+    setAddDraft({ name: "", line, kind, active: true });
     setAddAttempted(false);
     await refresh();
     setBusy(null);
@@ -221,12 +224,13 @@ export default function Stations({ profile }: { profile: Profile }) {
     setEditAttempted(true);
     const name = editDraft.name.trim();
     const line = editDraft.line.trim();
+    const kind = editDraft.kind.trim();
     if (!name || !line) return;
 
     setBusy(editId);
     const { error: writeError } = await supabase()
       .from("stations")
-      .update({ name, line, kind: editDraft.kind, active: editDraft.active })
+      .update({ name, line, kind, active: editDraft.active })
       .eq("id", editId);
     if (writeError) {
       setError(errorMessage(writeError));
@@ -278,6 +282,9 @@ export default function Stations({ profile }: { profile: Profile }) {
   }
 
   const lines = [...new Set(rows.map((r) => r.line))];
+  const kinds = [
+    ...new Set([...rows.map((r) => r.kind.trim()), ...KIND_SUGGESTIONS].filter(Boolean)),
+  ];
   const groups = groupByLine(rows);
 
   return (
@@ -305,6 +312,7 @@ export default function Stations({ profile }: { profile: Profile }) {
                 idBase={`${formId}-add`}
                 draft={addDraft}
                 lines={lines}
+                kinds={kinds}
                 attempted={addAttempted}
                 disabled={busy === "new"}
                 onChange={setAddDraft}
@@ -330,7 +338,7 @@ export default function Stations({ profile }: { profile: Profile }) {
               {["a", "b", "c"].map((key) => (
                 <div className="card" key={key}>
                   <p className="skeleton">Station name</p>
-                  <p className="skeleton">What it watches</p>
+                  <p className="skeleton">Kind of place</p>
                 </div>
               ))}
             </div>
@@ -366,6 +374,7 @@ export default function Stations({ profile }: { profile: Profile }) {
                           idBase={`${formId}-${row.id}`}
                           draft={editDraft}
                           lines={lines}
+                          kinds={kinds}
                           attempted={editAttempted}
                           disabled={busy === row.id}
                           onChange={setEditDraft}

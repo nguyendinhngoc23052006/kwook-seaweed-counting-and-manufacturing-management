@@ -8,6 +8,10 @@ export interface MinuteRow {
   minute: string;
   count: number;
   device_id: string;
+  // Where the session that wrote this minute was pointed. A phone runs one
+  // station today and another tomorrow, so the camera's current default cannot
+  // stand in for it.
+  station_id: string | null;
   achieved_fps: number | null;
   tracks_created: number;
   tracks_counted: number;

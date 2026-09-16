@@ -117,12 +117,13 @@ export default function Claim({ profile }: { profile: Profile }) {
     setCreating(true);
     setStationError(null);
     // tenant_id is written by hand because station_owner_write's with-check
-    // compares it to the caller's tenant; the column has no default. A station
-    // kind and a device function share one vocabulary, so the function chosen
-    // above is the right kind for the station this camera will point at.
+    // compares it to the caller's tenant; the column has no default. kind is
+    // left blank on purpose: it is the owner's word for what the place IS, not
+    // what a camera computes there - the Stations screen names it, and any
+    // number of sessions running any function can point here.
     const { data, error: writeError } = await supabase()
       .from("stations")
-      .insert({ tenant_id: profile.tenant_id, name: stationName, line, kind: func })
+      .insert({ tenant_id: profile.tenant_id, name: stationName, line, kind: "" })
       .select("id")
       .single();
     if (writeError) {

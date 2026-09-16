@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import Shell, { atLeast } from "../components/Shell";
 import type { MinuteRow } from "../lib/counts";
 import { errorMessage } from "../lib/errorMessage";
+import { functionLabel } from "../lib/functionsCatalog";
 import { loadMinutesSince } from "../lib/loadMinutes";
 import type { Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
+import { type CaptureSession, loadOpenSessions } from "../services/captureSessions";
 
 interface StationRow {
   id: string;
@@ -16,9 +18,16 @@ interface StationRow {
 interface DeviceRow {
   id: string;
   name: string;
-  station_id: string | null;
   last_seen_at: string | null;
   revoked_at: string | null;
+}
+
+// A camera on the line is an open session plus the phone holding it. Nothing
+// here reads devices.role or devices.station_id for what is happening now -
+// those survive only as the defaults the next session is pre-filled with.
+interface ActiveCamera {
+  session: CaptureSession;
+  device: DeviceRow;
 }
 
 export function health(lastSeen: string | null): { label: string; cls: string } {
@@ -31,15 +40,20 @@ export function health(lastSeen: string | null): { label: string; cls: string } 
 
 const SEVERITY: Record<string, number> = { ok: 0, warn: 1, crit: 2 };
 
-// A station is only as healthy as its worst camera: one dead camera means
-// counts are missing however well its neighbour is doing.
-function stationHealth(cameras: DeviceRow[]): { label: string; cls: string } {
+// A station is only as healthy as its worst recording camera: one dead camera
+// means counts are missing however well its neighbour is doing.
+//
+// With no open session the station is OFF the line in that instant - the end of
+// a shift, not a fault, so it never ages into "stale". The thresholds keep their
+// old meaning for the sessions that ARE open, where they now say something
+// sharper: this camera claims to be recording and is not reporting.
+function stationState(cameras: ActiveCamera[]): { label: string; cls: string } {
   let worst: { label: string; cls: string } | null = null;
   for (const camera of cameras) {
-    const state = health(camera.last_seen_at);
+    const state = health(camera.device.last_seen_at);
     if (!worst || (SEVERITY[state.cls] ?? 0) > (SEVERITY[worst.cls] ?? 0)) worst = state;
   }
-  return worst ?? { label: "no camera", cls: "idle" };
+  return worst ?? { label: "off", cls: "idle" };
 }
 
 function groupByLine(rows: StationRow[]): [string, StationRow[]][] {
@@ -56,9 +70,14 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+function hhmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function Wall({ profile }: { profile: Profile }) {
   const [stations, setStations] = useState<StationRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [sessions, setSessions] = useState<CaptureSession[]>([]);
   const [minutes, setMinutes] = useState<MinuteRow[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -73,15 +92,13 @@ export default function Wall({ profile }: { profile: Profile }) {
       dayStart.setHours(0, 0, 0, 0);
 
       try {
-        const [stationResult, deviceResult, minuteResult] = await Promise.all([
+        const [stationResult, deviceResult, openSessions, minuteResult] = await Promise.all([
           supabase().from("stations").select("id, name, line").order("line").order("name"),
           // Revoked cameras are read too, because the minutes they already wrote
           // still belong to their station: unpairing a phone must not shrink the
           // day's total. They are dropped below, where liveness is shown.
-          supabase()
-            .from("devices")
-            .select("id, name, station_id, last_seen_at, revoked_at")
-            .order("name"),
+          supabase().from("devices").select("id, name, last_seen_at, revoked_at").order("name"),
+          loadOpenSessions(),
           loadMinutesSince(dayStart.toISOString()),
         ]);
         if (cancelled) return;
@@ -95,11 +112,13 @@ export default function Wall({ profile }: { profile: Profile }) {
         setError(null);
         setStations((stationResult.data as StationRow[]) ?? []);
         setDevices((deviceResult.data as DeviceRow[]) ?? []);
+        setSessions(openSessions);
         setMinutes(minuteResult.rows);
         setTruncated(minuteResult.truncated);
         setLoading(false);
       } catch (failure) {
-        // loadMinutesSince throws where the other two return their error in-band.
+        // loadMinutesSince and loadOpenSessions throw where the other two return
+        // their error in-band.
         if (cancelled) return;
         setError(errorMessage(failure));
         setLoading(false);
@@ -114,31 +133,38 @@ export default function Wall({ profile }: { profile: Profile }) {
     };
   }, []);
 
-  const stationOfDevice = new Map<string, string>();
-  const camerasByStation = new Map<string, DeviceRow[]>();
-  const unassigned: DeviceRow[] = [];
+  const liveDevices = new Map<string, DeviceRow>();
   for (const device of devices) {
-    if (device.station_id) stationOfDevice.set(device.id, device.station_id);
     // A revoked camera cannot write, so counting it would hold its station at
-    // "down" forever.
+    // "down" forever. The revoke also closes its sessions in the database, so
+    // dropping it here drops whatever open row was still in flight.
     if (device.revoked_at) continue;
-    if (!device.station_id) {
-      unassigned.push(device);
-      continue;
-    }
-    const list = camerasByStation.get(device.station_id);
-    if (list) list.push(device);
-    else camerasByStation.set(device.station_id, [device]);
+    liveDevices.set(device.id, device);
   }
 
-  // The shared loader selects the columns the station screen charts, which do
-  // not include the row's own station_id, so a minute is attributed through the
-  // camera that wrote it.
+  const activeByStation = new Map<string, ActiveCamera[]>();
+  const unstationed: ActiveCamera[] = [];
+  for (const session of sessions) {
+    const device = liveDevices.get(session.device_id);
+    if (!device) continue;
+    const camera = { session, device };
+    if (!session.station_id) {
+      unstationed.push(camera);
+      continue;
+    }
+    const list = activeByStation.get(session.station_id);
+    if (list) list.push(camera);
+    else activeByStation.set(session.station_id, [camera]);
+  }
+
+  // Today's totals are history, not liveness: every minute belongs to the
+  // station its own session was pointed at, which is what the station screen
+  // filters on. Attributing through the camera's current default would move a
+  // whole morning to another line the moment an owner changed it.
   const countByStation = new Map<string, number>();
   for (const row of minutes) {
-    const stationId = stationOfDevice.get(row.device_id);
-    if (!stationId) continue;
-    countByStation.set(stationId, (countByStation.get(stationId) ?? 0) + row.count);
+    if (!row.station_id) continue;
+    countByStation.set(row.station_id, (countByStation.get(row.station_id) ?? 0) + row.count);
   }
 
   const lines = groupByLine(stations);
@@ -210,8 +236,8 @@ export default function Wall({ profile }: { profile: Profile }) {
                 </div>
                 <div className="grid grid--wide">
                   {list.map((station) => {
-                    const cameras = camerasByStation.get(station.id) ?? [];
-                    const state = stationHealth(cameras);
+                    const running = activeByStation.get(station.id) ?? [];
+                    const state = stationState(running);
                     return (
                       <Link
                         className="card card--link stack"
@@ -226,7 +252,12 @@ export default function Wall({ profile }: { profile: Profile }) {
                           {(countByStation.get(station.id) ?? 0).toLocaleString()}
                           <span className="unit">leaves</span>
                         </div>
-                        <div className="muted">{plural(cameras.length, "camera")}</div>
+                        {running.map(({ session, device }) => (
+                          <div className="muted" key={session.id}>
+                            {device.name} · {functionLabel(session.camera_function)} · since{" "}
+                            {hhmm(session.started_at)}
+                          </div>
+                        ))}
                       </Link>
                     );
                   })}
@@ -235,16 +266,16 @@ export default function Wall({ profile }: { profile: Profile }) {
             );
           })}
 
-        {!loading && unassigned.length > 0 ? (
+        {!loading && unstationed.length > 0 ? (
           <div className="section">
             <div className="section__head">
-              <h2 className="section__title">Unassigned cameras</h2>
-              <span className="muted">{plural(unassigned.length, "camera")}</span>
+              <h2 className="section__title">Recording with no station</h2>
+              <span className="muted">{plural(unstationed.length, "camera")}</span>
             </div>
             <div className="banner banner--warn">
               <span>
-                These cameras have no station, so whatever they count belongs to no line and appears
-                nowhere above.
+                These cameras are recording without a station, so whatever they count belongs to no
+                line and appears nowhere above.
               </span>
               {atLeast(profile.role, "owner") ? (
                 <Link className="btn" to="/admin">
@@ -255,12 +286,17 @@ export default function Wall({ profile }: { profile: Profile }) {
               )}
             </div>
             <div className="grid">
-              {unassigned.map((camera) => {
-                const state = health(camera.last_seen_at);
+              {unstationed.map(({ session, device }) => {
+                const state = health(device.last_seen_at);
                 return (
-                  <div className="card row" key={camera.id}>
-                    <strong>{camera.name}</strong>
-                    <span className={`pill pill--${state.cls}`}>{state.label}</span>
+                  <div className="card stack" key={session.id}>
+                    <div className="row">
+                      <strong>{device.name}</strong>
+                      <span className={`pill pill--${state.cls}`}>{state.label}</span>
+                    </div>
+                    <div className="muted">
+                      {functionLabel(session.camera_function)} · since {hhmm(session.started_at)}
+                    </div>
                   </div>
                 );
               })}

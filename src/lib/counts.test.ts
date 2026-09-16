@@ -6,6 +6,7 @@ function row(minute: string, count: number, deviceId = "dev-a"): MinuteRow {
     minute,
     count,
     device_id: deviceId,
+    station_id: "st-a",
     achieved_fps: 12,
     tracks_created: count + 2,
     tracks_counted: count,

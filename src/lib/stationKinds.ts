@@ -1,14 +1,17 @@
-// What a station watches. The screens that write a kind and the screens that
-// show one read the same list, so a station never reads as the raw enum on one
-// page and as English on another.
+// A station's kind is the owner's own word for what the place IS, not what a
+// camera computes there - that is the session's camera_function. The list below
+// is only a starting vocabulary; the floor names itself.
 
-export const STATION_KINDS: { value: string; label: string }[] = [
-  { value: "provisioning", label: "Tray snapshot counting" },
-  { value: "counting", label: "Belt line counting" },
-  { value: "compliance", label: "Doorway compliance" },
-  { value: "overview", label: "Overview / wall" },
+export const KIND_SUGGESTIONS: string[] = [
+  "Belt",
+  "Tray table",
+  "Doorway",
+  "Wash bay",
+  "Packing table",
+  "Cold store",
+  "Loading bay",
 ];
 
 export function kindLabel(kind: string): string {
-  return STATION_KINDS.find((k) => k.value === kind)?.label ?? kind;
+  return kind.trim() || "Unspecified";
 }
