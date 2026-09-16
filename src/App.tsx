@@ -10,6 +10,8 @@ import Demo from "./pages/Demo";
 import Login from "./pages/Login";
 import Pair from "./pages/Pair";
 import Scan from "./pages/Scan";
+import Station from "./pages/Station";
+import Stations from "./pages/Stations";
 import Wall from "./pages/Wall";
 
 export default function App() {
@@ -31,31 +33,41 @@ export default function App() {
   // it shows a QR and receives one when an admin claims it.
   if (window.location.pathname === "/pair") return <Pair />;
 
-  if (loading) return <div className="wrap">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="wrap">
+        <div className="card stack">
+          <span className="skeleton">Checking your account</span>
+          <span className="skeleton">One moment</span>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="wrap">
-        <div className="card crit">{error}</div>
+        <div className="banner banner--crit" role="alert">
+          {error}
+        </div>
       </div>
     );
   }
   if (!profile) return <Login />;
 
-  // Signed up but not yet approved. The owner promotes the account by hand in
-  // the Supabase dashboard (Table Editor -> profiles -> role); until then the
-  // database lets this account read nothing but its own row.
+  // Signed up but not yet approved: the database lets this account read nothing
+  // but its own row until an owner grants it a role in Cameras.
   if (profile.kind === "human" && profile.role === "pending") {
     return (
-      <div className="wrap" style={{ maxWidth: 420 }}>
-        <div className="card">
-          <h1>Waiting for approval</h1>
-          <p>
-            Account <strong>{profile.display_name}</strong> exists but has not been approved yet.
-            Ask the administrator to approve it, then reload.
+      <div className="wrap">
+        <div className="empty">
+          <h1 className="empty__title">Waiting for approval</h1>
+          <p className="empty__body">
+            Account <strong>{profile.display_name}</strong> exists but has not been approved yet. An
+            owner approves it in the app; reload once they have.
           </p>
           <button
             type="button"
-            className="secondary"
+            className="btn btn--ghost"
             onClick={async () => {
               await supabase().auth.signOut();
               window.location.reload();
@@ -75,6 +87,8 @@ export default function App() {
       <Routes>
         <Route path="/capture" element={<Capture profile={profile} />} />
         <Route path="/wall" element={<Wall profile={profile} />} />
+        <Route path="/stations" element={<Stations profile={profile} />} />
+        <Route path="/station/:id" element={<Station profile={profile} />} />
         <Route path="/admin" element={<Admin profile={profile} />} />
         <Route path="/claim" element={<Claim profile={profile} />} />
         <Route path="/scan" element={<Scan profile={profile} />} />

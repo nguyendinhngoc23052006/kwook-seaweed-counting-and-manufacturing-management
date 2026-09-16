@@ -1,3 +1,15 @@
+/* ==========================================================================
+   Kwook design system.
+   Mobile-first. Two viewing distances matter: a phone held by a gloved hand,
+   and a wall screen read from ~3 m. Touch targets >= 44px, text >= 15px.
+   Sections: tokens / layout / surfaces / type / controls / forms / status /
+   states / table / legacy.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   TOKENS
+   -------------------------------------------------------------------------- */
+
 :root {
   color-scheme: light dark;
   --ground: #f1f4f6;
@@ -9,6 +21,30 @@
   --ok: #2e7d5b;
   --warn: #a96c12;
   --crit: #b03f30;
+  /* Text drawn on a filled control (.btn--primary, .btn--danger). */
+  --accent-ink: #ffffff;
+  /* Tinted fills, written per theme so no colour function is needed. */
+  --wash-accent: #e7f0f7;
+  --wash-ok: #e6f2ec;
+  --wash-warn: #f8efdf;
+  --wash-crit: #fbeae7;
+  --focus: #1668a8;
+  --skeleton-base: #e3e9ed;
+  --skeleton-shine: #f4f7f9;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(17, 32, 43, 0.07);
+  --shadow-2: 0 8px 24px rgba(17, 32, 43, 0.16);
+  /* Glove-sized minimum; --tap-sm is the one deliberate exception (.btn--sm). */
+  --tap: 44px;
+  --tap-sm: 36px;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -23,59 +59,501 @@
     --ok: #4fa97f;
     --warn: #cf9134;
     --crit: #d1614f;
+    --accent-ink: #08131a;
+    --wash-accent: #16303f;
+    --wash-ok: #163029;
+    --wash-warn: #33281a;
+    --wash-crit: #34201d;
+    --focus: #7cc4ef;
+    --skeleton-base: #1e2a33;
+    --skeleton-shine: #2a3945;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55);
   }
 }
 
 * {
   box-sizing: border-box;
 }
-
 body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font-size: 15px;
+  font-size: 1rem;
   line-height: 1.5;
+}
+a {
+  color: var(--accent);
+}
+img,
+video {
+  max-width: 100%;
+}
+video {
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+/* One ring, every interactive thing. */
+:is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   LEGACY — bare elements on pages not yet moved onto the classes above.
+   Delete this block once every page uses .btn / .field__input / .table.
+   -------------------------------------------------------------------------- */
+
+button {
+  font: inherit;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+}
+input,
+select,
+textarea {
+  font: inherit;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+table th,
+table td {
+  text-align: left;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* --------------------------------------------------------------------------
+   LAYOUT
+   -------------------------------------------------------------------------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--ground);
+}
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
+  padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2)
+    max(var(--space-3), env(safe-area-inset-left));
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: var(--shadow-1);
+}
+.appbar__brand {
+  flex: 0 0 auto;
+  /* On /capture the brand is the operator-entered camera name, so it must be
+     allowed to shrink rather than widen the bar past the viewport. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--ink);
+  text-decoration: none;
+}
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Never wraps: on a 360px phone the links scroll sideways instead. */
+.appbar__nav {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+  /* overflow-x makes this a scroll container in both axes, which would clip the
+     3px focus ring at its 2px offset; the padding gives the ring room and the
+     negative margin gives the space back to the bar. */
+  padding: 5px 0;
+  margin: -5px 0;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.appbar__nav::-webkit-scrollbar {
+  display: none;
+}
+.appbar__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.navlink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.navlink--active {
+  color: var(--accent);
+  background: var(--wash-accent);
 }
 
 .wrap {
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: var(--space-5) max(var(--space-4), env(safe-area-inset-right)) var(--space-6)
+    max(var(--space-4), env(safe-area-inset-left));
 }
-.card {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 16px;
-}
-.grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+
+/* The default vertical rhythm — children need no margins of their own. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 .row {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
   align-items: center;
 }
+.grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+}
+.grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+/* --------------------------------------------------------------------------
+   SURFACES
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-1);
+}
+/* For content that brings its own padding: tables, media, lists. */
+.card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+/* A whole card that is one link: the `a` rule above would otherwise paint every
+   figure and label inside it as underlined accent text. */
+.card--link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 120ms ease;
+}
+
+@media (hover: hover) {
+  .card--link:hover {
+    border-color: var(--accent);
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.section__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* --------------------------------------------------------------------------
+   TYPE
+   -------------------------------------------------------------------------- */
+
+.h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2.125rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.h2 {
+  margin: 0;
+  font-size: clamp(1.125rem, 1rem + 0.7vw, 1.4rem);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
 .label {
-  font-size: 11px;
+  font-size: 0.8125rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.muted {
   color: var(--ink-soft);
 }
 .figure {
-  font-size: 2.2rem;
-  font-weight: 600;
+  font-size: clamp(1.9rem, 1.6rem + 1.2vw, 2.4rem);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
+/* Wall-screen size: legible at ~3 m. */
+.figure--lg {
+  font-size: clamp(2.5rem, 1.4rem + 5vw, 4rem);
+  line-height: 1;
+}
+/* Sits inside a .figure; the max() keeps it readable if used on its own. */
+.unit {
+  font-size: max(0.5em, 0.9375rem);
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-left: 0.15em;
+}
+
+/* --------------------------------------------------------------------------
+   CONTROLS
+   -------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn--ghost {
+  background: transparent;
+  /* A visible edge, not bare text: every ghost button in this app is a real
+     secondary action (Cancel, Sign out, Back to cameras, "Use this device as a
+     camera"). With a transparent border they read as links, and the sign-in
+     screen becomes three stacked blue phrases with no hierarchy. */
+  border-color: var(--rule);
+  color: var(--accent);
+}
+.btn--danger {
+  background: var(--crit);
+  border-color: var(--crit);
+  color: var(--accent-ink);
+}
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+.btn--sm {
+  min-height: var(--tap-sm);
+  padding: 0 var(--space-3);
+  font-size: 0.9375rem;
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.appbar .btn {
+  flex: 0 0 auto;
+}
+
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  .btn--ghost:hover:not(:disabled) {
+    background: var(--wash-accent);
+  }
+  .navlink:hover {
+    background: var(--wash-accent);
+    color: var(--accent);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   FORMS
+   -------------------------------------------------------------------------- */
+
+/* No margin of its own — put fields in a .stack and the gap spaces them. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.field__label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.field__input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  /* 16px exactly: anything smaller makes iOS Safari zoom on focus. */
+  font-size: 1rem;
+  line-height: 1.4;
+  appearance: none;
+}
+select.field__input {
+  padding-right: var(--space-6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2355636f' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 12px 8px;
+}
+textarea.field__input {
+  min-height: 96px;
+  resize: vertical;
+}
+.field__input::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.field__input:disabled {
+  background: var(--ground);
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+.field__hint {
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+}
+.field__error {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--crit);
+}
+.field--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.field--inline .field__input {
+  flex: 1 1 200px;
+  width: auto;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  select.field__input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%2393a3af' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
+
+/* --------------------------------------------------------------------------
+   STATUS
+   -------------------------------------------------------------------------- */
+
 .pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
   border: 1px solid currentColor;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.pill--ok {
+  color: var(--ok);
+  background: var(--wash-ok);
+}
+.pill--warn {
+  color: var(--warn);
+  background: var(--wash-warn);
+}
+.pill--crit {
+  color: var(--crit);
+  background: var(--wash-crit);
+}
+.pill--idle {
+  color: var(--ink-soft);
+  background: var(--ground);
 }
 .ok {
   color: var(--ok);
@@ -86,40 +564,235 @@ body {
 .crit {
   color: var(--crit);
 }
-button {
-  font: inherit;
-  padding: 8px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-button.secondary {
-  background: transparent;
-  color: var(--accent);
-}
-input,
-select {
-  font: inherit;
-  padding: 8px;
-  border-radius: 6px;
+
+/* A persistent state strip: offline, pending approval, degraded stream. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--rule);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-weight: 500;
+}
+.banner--info {
+  border-color: var(--accent);
+  background: var(--wash-accent);
+}
+.banner--warn {
+  border-color: var(--warn);
+  background: var(--wash-warn);
+}
+.banner--crit {
+  border-color: var(--crit);
+  background: var(--wash-crit);
+}
+
+.toast-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.toast-host > * {
+  pointer-events: auto;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(560px, 100%);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--rule);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--ink);
+  font-weight: 500;
+  box-shadow: var(--shadow-2);
+  animation: toast-in 160ms ease-out;
 }
-video {
-  max-width: 100%;
-  border-radius: 6px;
-  background: #000;
+.toast--ok {
+  border-color: var(--ok);
 }
-table {
+.toast--crit {
+  border-color: var(--crit);
+}
+
+/* --------------------------------------------------------------------------
+   STATES
+   -------------------------------------------------------------------------- */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-md);
+  text-align: center;
+  color: var(--ink-soft);
+}
+.empty__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+.empty__body {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.skeleton {
+  min-height: 1.15rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  color: transparent;
+  user-select: none;
+}
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  vertical-align: -4px;
+  border: 2.5px solid var(--rule);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .card--link,
+  .toast {
+    transition: none;
+    animation: none;
+  }
+  /* Shimmer is decoration, so it goes. The spinner still has to say "working",
+     so it slows down instead of stopping. */
+  .skeleton {
+    animation: none;
+    background: var(--skeleton-base);
+  }
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TABLE
+   -------------------------------------------------------------------------- */
+
+.table {
   width: 100%;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
-th,
-td {
+.table th {
+  padding: var(--space-3);
   text-align: left;
-  padding: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  white-space: nowrap;
   border-bottom: 1px solid var(--rule);
+}
+.table td {
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Phone: each row becomes a small card and every cell carries its own header,
+   read from data-label. A cell without one just spans the width. */
+@media (max-width: 640px) {
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+  }
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table tr {
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+  .table tr:last-child {
+    margin-bottom: 0;
+  }
+  .table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    text-align: right;
+    border-bottom: 1px solid var(--rule);
+  }
+  .table td:not([data-label]) {
+    text-align: left;
+  }
+  .table td:last-child {
+    border-bottom: none;
+  }
+  .table td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+  }
 }
