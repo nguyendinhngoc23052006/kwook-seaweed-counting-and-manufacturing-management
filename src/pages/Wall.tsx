@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Shell, { atLeast } from "../components/Shell";
-import type { MinuteRow } from "../lib/counts";
+import { isClockDrifting, type MinuteRow, totalFor } from "../lib/counts";
 import { errorMessage } from "../lib/errorMessage";
 import { functionLabel } from "../lib/functionsCatalog";
 import { loadMinutesSince } from "../lib/loadMinutes";
@@ -12,58 +12,64 @@ import { type CaptureSession, loadOpenSessions } from "../services/captureSessio
 interface StationRow {
   id: string;
   name: string;
-  line: string;
+  line_id: string | null;
 }
 
-interface DeviceRow {
+interface LineRow {
   id: string;
   name: string;
-  last_seen_at: string | null;
-  revoked_at: string | null;
 }
 
-// A camera on the line is an open session plus the phone holding it. Nothing
-// here reads devices.role or devices.station_id for what is happening now -
-// those survive only as the defaults the next session is pre-filled with.
-interface ActiveCamera {
-  session: CaptureSession;
-  device: DeviceRow;
+interface LineGroup {
+  key: string;
+  name: string;
+  stations: StationRow[];
 }
 
-export function health(lastSeen: string | null): { label: string; cls: string } {
-  if (!lastSeen) return { label: "never seen", cls: "crit" };
-  const minutes = (Date.now() - new Date(lastSeen).getTime()) / 60000;
-  if (minutes > 10) return { label: `down ${Math.round(minutes)}m`, cls: "crit" };
-  if (minutes > 2) return { label: `stale ${Math.round(minutes)}m`, cls: "warn" };
-  return { label: "live", cls: "ok" };
-}
-
-const SEVERITY: Record<string, number> = { ok: 0, warn: 1, crit: 2 };
-
-// A station is only as healthy as its worst recording camera: one dead camera
-// means counts are missing however well its neighbour is doing.
-//
-// With no open session the station is OFF the line in that instant - the end of
-// a shift, not a fault, so it never ages into "stale". The thresholds keep their
-// old meaning for the sessions that ARE open, where they now say something
-// sharper: this camera claims to be recording and is not reporting.
-function stationState(cameras: ActiveCamera[]): { label: string; cls: string } {
-  let worst: { label: string; cls: string } | null = null;
-  for (const camera of cameras) {
-    const state = health(camera.device.last_seen_at);
-    if (!worst || (SEVERITY[state.cls] ?? 0) > (SEVERITY[worst.cls] ?? 0)) worst = state;
-  }
-  return worst ?? { label: "off", cls: "idle" };
-}
-
-function groupByLine(rows: StationRow[]): [string, StationRow[]][] {
+// A line is a row now, not the text on a station (migration 20260917091000), so
+// "Line Plant" and "line plant" are one heading with one total instead of two
+// half-empty ones. Grouping walks the lines table, which also fixes the order:
+// the floor's own order, not whatever the station names sort into.
+function groupByLine(stations: StationRow[], lines: LineRow[]): LineGroup[] {
   const byLine = new Map<string, StationRow[]>();
-  for (const row of rows) {
-    const list = byLine.get(row.line);
-    if (list) list.push(row);
-    else byLine.set(row.line, [row]);
+  const unplaced: StationRow[] = [];
+  for (const station of stations) {
+    if (!station.line_id) {
+      unplaced.push(station);
+      continue;
+    }
+    const list = byLine.get(station.line_id);
+    if (list) list.push(station);
+    else byLine.set(station.line_id, [station]);
   }
-  return [...byLine];
+
+  const groups: LineGroup[] = [];
+  for (const line of lines) {
+    const list = byLine.get(line.id);
+    if (list) groups.push({ key: line.id, name: line.name, stations: list });
+  }
+  // A station can be created before its line is chosen, and its counts are real
+  // either way. Last, and named, so nobody reads the wall as complete.
+  if (unplaced.length > 0)
+    groups.push({ key: "unplaced", name: "No line yet", stations: unplaced });
+  return groups;
+}
+
+// What a station is doing now is its open capture_session and nothing else: the
+// owner's assignment on the devices row says where a camera BELONGS, and the
+// session says it is actually recording there. No open session is "off" - the
+// end of a shift, not a fault, so it never ages into stale.
+//
+// A running session is graded on its own evidence (last_evidence_at, advanced by
+// every heartbeat), which is the same clock the reaper closes it with. A session
+// that has not beaten yet is as old as its start.
+function sessionState(session: CaptureSession | undefined): { label: string; cls: string } {
+  if (!session) return { label: "off", cls: "idle" };
+  const evidence = session.last_evidence_at ?? session.started_at;
+  const minutes = (Date.now() - new Date(evidence).getTime()) / 60000;
+  if (minutes > 10) return { label: `silent ${Math.round(minutes)}m`, cls: "crit" };
+  if (minutes > 2) return { label: `quiet ${Math.round(minutes)}m`, cls: "warn" };
+  return { label: "running", cls: "ok" };
 }
 
 function plural(n: number, word: string): string {
@@ -74,9 +80,16 @@ function hhmm(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function cameraLine(session: CaptureSession): string {
+  // device_label is the snapshot the insert trigger took; sessions started
+  // before it existed carry none.
+  const label = session.device_label ?? "Camera";
+  return `${label} · ${functionLabel(session.camera_function)} · since ${hhmm(session.started_at)}`;
+}
+
 export default function Wall({ profile }: { profile: Profile }) {
   const [stations, setStations] = useState<StationRow[]>([]);
-  const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [lines, setLines] = useState<LineRow[]>([]);
   const [sessions, setSessions] = useState<CaptureSession[]>([]);
   const [minutes, setMinutes] = useState<MinuteRow[]>([]);
   const [truncated, setTruncated] = useState(false);
@@ -92,18 +105,18 @@ export default function Wall({ profile }: { profile: Profile }) {
       dayStart.setHours(0, 0, 0, 0);
 
       try {
-        const [stationResult, deviceResult, openSessions, minuteResult] = await Promise.all([
-          supabase().from("stations").select("id, name, line").order("line").order("name"),
-          // Revoked cameras are read too, because the minutes they already wrote
-          // still belong to their station: unpairing a phone must not shrink the
-          // day's total. They are dropped below, where liveness is shown.
-          supabase().from("devices").select("id, name, last_seen_at, revoked_at").order("name"),
+        const [stationResult, lineResult, openSessions, minuteResult] = await Promise.all([
+          supabase().from("stations").select("id, name, line_id").order("name"),
+          supabase().from("lines").select("id, name").order("name"),
+          // No devices read: a session carries the phone's label and its own
+          // evidence, and revoking a phone closes its sessions in the database
+          // (migration 20260916170000), so an open session is a live camera.
           loadOpenSessions(),
           loadMinutesSince(dayStart.toISOString()),
         ]);
         if (cancelled) return;
 
-        const failure = stationResult.error ?? deviceResult.error;
+        const failure = stationResult.error ?? lineResult.error;
         if (failure) {
           setError(errorMessage(failure));
           setLoading(false);
@@ -111,7 +124,7 @@ export default function Wall({ profile }: { profile: Profile }) {
         }
         setError(null);
         setStations((stationResult.data as StationRow[]) ?? []);
-        setDevices((deviceResult.data as DeviceRow[]) ?? []);
+        setLines((lineResult.data as LineRow[]) ?? []);
         setSessions(openSessions);
         setMinutes(minuteResult.rows);
         setTruncated(minuteResult.truncated);
@@ -133,41 +146,28 @@ export default function Wall({ profile }: { profile: Profile }) {
     };
   }, []);
 
-  const liveDevices = new Map<string, DeviceRow>();
-  for (const device of devices) {
-    // A revoked camera cannot write, so counting it would hold its station at
-    // "down" forever. The revoke also closes its sessions in the database, so
-    // dropping it here drops whatever open row was still in flight.
-    if (device.revoked_at) continue;
-    liveDevices.set(device.id, device);
-  }
-
-  const activeByStation = new Map<string, ActiveCamera[]>();
-  const unstationed: ActiveCamera[] = [];
+  // One open session per station is a database guarantee now
+  // (capture_sessions_one_open_per_station), so a station has one camera or
+  // none, and two phones can no longer double a station's total.
+  const sessionByStation = new Map<string, CaptureSession>();
+  const unstationed: CaptureSession[] = [];
   for (const session of sessions) {
-    const device = liveDevices.get(session.device_id);
-    if (!device) continue;
-    const camera = { session, device };
-    if (!session.station_id) {
-      unstationed.push(camera);
-      continue;
-    }
-    const list = activeByStation.get(session.station_id);
-    if (list) list.push(camera);
-    else activeByStation.set(session.station_id, [camera]);
+    if (session.station_id) sessionByStation.set(session.station_id, session);
+    else unstationed.push(session);
   }
 
-  // Today's totals are history, not liveness: every minute belongs to the
-  // station its own session was pointed at, which is what the station screen
-  // filters on. Attributing through the camera's current default would move a
-  // whole morning to another line the moment an owner changed it.
-  const countByStation = new Map<string, number>();
+  // Today's totals are history, not liveness: a minute belongs to the station
+  // the server stamped on it when it arrived, so a camera reassigned at noon
+  // leaves the morning where it was counted.
+  const minutesByStation = new Map<string, MinuteRow[]>();
   for (const row of minutes) {
     if (!row.station_id) continue;
-    countByStation.set(row.station_id, (countByStation.get(row.station_id) ?? 0) + row.count);
+    const list = minutesByStation.get(row.station_id);
+    if (list) list.push(row);
+    else minutesByStation.set(row.station_id, [row]);
   }
 
-  const lines = groupByLine(stations);
+  const groups = groupByLine(stations, lines);
 
   return (
     <Shell profile={profile} active="wall">
@@ -226,18 +226,22 @@ export default function Wall({ profile }: { profile: Profile }) {
         ) : null}
 
         {!loading &&
-          lines.map(([line, list]) => {
-            const lineTotal = list.reduce((sum, s) => sum + (countByStation.get(s.id) ?? 0), 0);
+          groups.map((group) => {
+            const lineTotal = group.stations.reduce(
+              (sum, station) => sum + totalFor(minutesByStation.get(station.id) ?? []),
+              0,
+            );
             return (
-              <div className="section" key={line}>
+              <div className="section" key={group.key}>
                 <div className="section__head">
-                  <h2 className="section__title">{line}</h2>
+                  <h2 className="section__title">{group.name}</h2>
                   <span className="muted">{lineTotal.toLocaleString()} leaves today</span>
                 </div>
                 <div className="grid grid--wide">
-                  {list.map((station) => {
-                    const running = activeByStation.get(station.id) ?? [];
-                    const state = stationState(running);
+                  {group.stations.map((station) => {
+                    const stationMinutes = minutesByStation.get(station.id) ?? [];
+                    const session = sessionByStation.get(station.id);
+                    const state = sessionState(session);
                     return (
                       <Link
                         className="card card--link stack"
@@ -247,17 +251,18 @@ export default function Wall({ profile }: { profile: Profile }) {
                         <div className="row">
                           <strong className="h2">{station.name}</strong>
                           <span className={`pill pill--${state.cls}`}>{state.label}</span>
+                          {/* A phone whose clock is out files its leaves under
+                              minutes that never happened here, and every figure
+                              on this card still looks perfectly normal. */}
+                          {isClockDrifting(stationMinutes) ? (
+                            <span className="pill pill--warn">camera clock drifting</span>
+                          ) : null}
                         </div>
                         <div className="figure">
-                          {(countByStation.get(station.id) ?? 0).toLocaleString()}
+                          {totalFor(stationMinutes).toLocaleString()}
                           <span className="unit">leaves</span>
                         </div>
-                        {running.map(({ session, device }) => (
-                          <div className="muted" key={session.id}>
-                            {device.name} · {functionLabel(session.camera_function)} · since{" "}
-                            {hhmm(session.started_at)}
-                          </div>
-                        ))}
+                        {session ? <div className="muted">{cameraLine(session)}</div> : null}
                       </Link>
                     );
                   })}
@@ -286,12 +291,12 @@ export default function Wall({ profile }: { profile: Profile }) {
               )}
             </div>
             <div className="grid">
-              {unstationed.map(({ session, device }) => {
-                const state = health(device.last_seen_at);
+              {unstationed.map((session) => {
+                const state = sessionState(session);
                 return (
                   <div className="card stack" key={session.id}>
                     <div className="row">
-                      <strong>{device.name}</strong>
+                      <strong>{session.device_label ?? "Camera"}</strong>
                       <span className={`pill pill--${state.cls}`}>{state.label}</span>
                     </div>
                     <div className="muted">

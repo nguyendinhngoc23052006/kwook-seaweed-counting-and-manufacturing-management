@@ -33,7 +33,7 @@ export default function Login() {
   }
 
   return (
-    <div className="wrap">
+    <div className="wrap wrap--narrow">
       <div className="stack">
         <h1 className="h1">Kwook Line Vision</h1>
 

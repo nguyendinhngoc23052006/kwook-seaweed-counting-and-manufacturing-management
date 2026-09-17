@@ -76,7 +76,7 @@ update profiles
 
 -- The ::uuid casts are required: INSERT ... SELECT does not coerce a string
 -- literal to the target column's type the way a plain VALUES insert does.
-insert into devices (id, tenant_id, name, role, station_id)
+insert into devices (id, tenant_id, name, camera_function, station_id)
 select '22222222-2222-2222-2222-222222222222'::uuid, s.tenant_id, 'cam-01', 'counting', s.id
   from stations s where s.name = 'Belt 1'
 union all

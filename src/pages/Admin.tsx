@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import Shell from "../components/Shell";
 import { errorMessage } from "../lib/errorMessage";
-import { functionLabel } from "../lib/functionsCatalog";
+import { FUNCTIONS, functionLabel } from "../lib/functionsCatalog";
 import type { HumanRole, Profile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
 import { type CaptureSession, endSession, loadOpenSessions } from "../services/captureSessions";
@@ -11,10 +11,18 @@ interface DeviceRow {
   id: string;
   name: string;
   station_id: string | null;
+  camera_function: string;
   revoked_at: string | null;
 }
 
 interface StationRow {
+  id: string;
+  name: string;
+  line_id: string | null;
+  active: boolean;
+}
+
+interface LineRow {
   id: string;
   name: string;
   active: boolean;
@@ -42,12 +50,47 @@ const LADDER_HINT =
   "Viewer sees the wall. Supervisor also sees who else has an account. Manager also edits stations. Owner also pairs cameras and approves people.";
 
 const RECORDING_HINT =
-  "End session takes this camera off the line now - the phone stays paired and can start recording again. Unpairing cuts the phone off permanently in the database and keeps every count it ever wrote.";
-const IDLE_HINT =
-  "Unpairing cuts this phone off permanently in the database and keeps every count it ever wrote.";
+  "End session takes this camera off the line now - the phone stays paired and can start again. ";
+const REMOVAL_HINT =
+  "Unpair keeps every count this camera ever wrote; Delete camera only works while it has written none.";
+
+// A phone that has said nothing for this long is not proving anything, so
+// whatever it has counted since is still sitting in its own queue.
+const SILENT_MINUTES = 2;
 
 function hhmm(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function minutesSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+}
+
+// What the phone has proved, stated as what is missing rather than as a
+// reassuring "online": a camera whose heartbeats stopped is still counting on
+// its own screen, and those minutes are on the phone, not in the database.
+function evidenceLine(session: CaptureSession): string {
+  if (!session.last_evidence_at) return "nothing received from the phone yet";
+  const silent = minutesSince(session.last_evidence_at);
+  if (silent >= SILENT_MINUTES) {
+    return `nothing heard for ${silent} min - anything counted since is still queued on the phone`;
+  }
+  return `last heard ${hhmm(session.last_evidence_at)}`;
+}
+
+// The database decides whether a camera may be deleted, so this screen never
+// counts rows to guess the answer - it asks, and translates the refusal.
+// 23503 is a foreign key still pointing here (its measurements, or the pairing
+// code it was claimed with); 42501 is the revoked DELETE privilege from
+// migration 20260917090000, which refuses every camera whatever it measured.
+function deleteRefusal(failure: { code: string }, name: string): string {
+  if (failure.code === "23503") {
+    return `${name} has already measured something, so the database refused to delete it - every count, heartbeat and session it produced is kept. Unpair it instead: that cuts the phone off and keeps the history.`;
+  }
+  if (failure.code === "42501") {
+    return `Deleting a camera is switched off in this database, so ${name} cannot be removed this way. Unpair it instead: that cuts the phone off immediately and keeps everything it measured.`;
+  }
+  return errorMessage(failure);
 }
 
 function RoleSelect({
@@ -94,10 +137,13 @@ export default function Admin({ profile }: { profile: Profile }) {
   const formId = useId();
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [stations, setStations] = useState<StationRow[]>([]);
+  const [lines, setLines] = useState<LineRow[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [sessions, setSessions] = useState<CaptureSession[]>([]);
   const [drafts, setDrafts] = useState<Record<string, HumanRole>>({});
+  const [lineDrafts, setLineDrafts] = useState<Record<string, string>>({});
   const [confirmOwnerId, setConfirmOwnerId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,9 +153,13 @@ export default function Admin({ profile }: { profile: Profile }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [d, s, p, openSessions] = await Promise.all([
-        supabase().from("devices").select("id, name, station_id, revoked_at").order("name"),
-        supabase().from("stations").select("id, name, active").order("name"),
+      const [d, s, l, p, openSessions] = await Promise.all([
+        supabase()
+          .from("devices")
+          .select("id, name, station_id, camera_function, revoked_at")
+          .order("name"),
+        supabase().from("stations").select("id, name, line_id, active").order("name"),
+        supabase().from("lines").select("id, name, active").order("name"),
         supabase()
           .from("profiles")
           .select("id, display_name, role, created_at")
@@ -117,7 +167,7 @@ export default function Admin({ profile }: { profile: Profile }) {
           .order("display_name"),
         loadOpenSessions(),
       ]);
-      const failed = d.error ?? s.error ?? p.error;
+      const failed = d.error ?? s.error ?? l.error ?? p.error;
       if (failed) {
         setError(errorMessage(failed));
         return;
@@ -125,10 +175,11 @@ export default function Admin({ profile }: { profile: Profile }) {
       setError(null);
       setDevices((d.data as DeviceRow[]) ?? []);
       setStations((s.data as StationRow[]) ?? []);
+      setLines((l.data as LineRow[]) ?? []);
       setPeople((p.data as PersonRow[]) ?? []);
       setSessions(openSessions);
     } catch (failure) {
-      // loadOpenSessions throws where the three queries return their error in-band.
+      // loadOpenSessions throws where the four queries return their error in-band.
       setError(errorMessage(failure));
     }
   }, []);
@@ -197,9 +248,8 @@ export default function Admin({ profile }: { profile: Profile }) {
   }
 
   // Unpair keeps every row the camera ever wrote - it only cuts the phone off
-  // (revoked_at blocks its writes in the database itself). There is
-  // deliberately NO delete: deleting a device would cascade into its history.
-  // The database trigger ends any open session, so this only re-reads after.
+  // (revoked_at blocks its writes in the database itself), and the database
+  // trigger ends any open session, so this only re-reads after.
   async function setRevoked(id: string, revoked: boolean) {
     setBusy(id);
     const { error: writeError } = await supabase()
@@ -213,11 +263,14 @@ export default function Admin({ profile }: { profile: Profile }) {
     }
     await refresh();
     setBusy(null);
-    showToast(revoked ? "Camera unpaired." : "Camera re-activated.");
+    showToast(
+      revoked ? "Camera unpaired - everything it measured is kept." : "Camera re-activated.",
+    );
   }
 
-  // The other half of "remove a camera": this takes it off the line in that
-  // instant and leaves the phone paired, free to start a new session.
+  // The other half of "remove a camera" is not a delete at all: this takes it
+  // off the line in that instant and leaves the phone paired, free to start a
+  // new session.
   async function endOpenSession(device: DeviceRow, session: CaptureSession) {
     setBusy(device.id);
     try {
@@ -232,6 +285,23 @@ export default function Admin({ profile }: { profile: Profile }) {
     showToast(`${device.name} is off the line - it stays paired.`);
   }
 
+  async function deleteCamera(device: DeviceRow) {
+    setConfirmDeleteId(null);
+    setBusy(device.id);
+    const { error: writeError } = await supabase().from("devices").delete().eq("id", device.id);
+    if (writeError) {
+      setError(deleteRefusal(writeError, device.name));
+      setBusy(null);
+      return;
+    }
+    await refresh();
+    setBusy(null);
+    showToast(`${device.name} deleted - it had measured nothing.`);
+  }
+
+  // Placement is the owner's to decide and the camera's to read, so every one
+  // of these writes lands on the devices row and the screen re-reads it. The
+  // session takes its own snapshot server-side when the camera next starts.
   async function assignStation(device: DeviceRow, stationId: string | null) {
     const target = stations.find((s) => s.id === stationId);
     setBusy(device.id);
@@ -248,9 +318,25 @@ export default function Admin({ profile }: { profile: Profile }) {
     setBusy(null);
     showToast(
       target
-        ? `${device.name} starts at ${target.name} the next time it records.`
-        : `${device.name} has no default station - its next session starts with none.`,
+        ? `${device.name} stands at ${target.name}. Its next session starts there.`
+        : `${device.name} has no station - it cannot record until you give it one.`,
     );
+  }
+
+  async function assignFunction(device: DeviceRow, cameraFunction: string) {
+    setBusy(device.id);
+    const { error: writeError } = await supabase()
+      .from("devices")
+      .update({ camera_function: cameraFunction })
+      .eq("id", device.id);
+    if (writeError) {
+      setError(errorMessage(writeError));
+      setBusy(null);
+      return;
+    }
+    await refresh();
+    setBusy(null);
+    showToast(`${device.name} is set to ${functionLabel(cameraFunction)}.`);
   }
 
   if (!isOwner) {
@@ -267,14 +353,42 @@ export default function Admin({ profile }: { profile: Profile }) {
     );
   }
 
-  const noStations = stations.length === 0;
-  // A retired station stays listed for the camera already on it, so an existing
-  // assignment is never silently dropped by the filter.
-  const stationChoices = (current: string | null) =>
-    stations.filter((s) => s.active || s.id === current);
+  const noLines = lines.length === 0;
   const sessionByDevice = new Map(sessions.map((s) => [s.device_id, s]));
+  const stationById = new Map(stations.map((s) => [s.id, s]));
   const stationName = (id: string | null) =>
-    stations.find((s) => s.id === id)?.name ?? "no station";
+    id ? (stationById.get(id)?.name ?? id) : "no station";
+  // A retired line or station stays listed for the camera already on it, so an
+  // existing assignment is never silently dropped by the filter.
+  const lineChoices = (current: string) => lines.filter((l) => l.active || l.id === current);
+  const stationChoices = (lineId: string, current: string | null) =>
+    stations.filter((s) => s.line_id === lineId && (s.active || s.id === current));
+  const chosenLine = (device: DeviceRow) =>
+    lineDrafts[device.id] ??
+    (device.station_id ? (stationById.get(device.station_id)?.line_id ?? "") : "");
+
+  function assignmentHint(device: DeviceRow, lineId: string): ReactNode {
+    if (noLines) {
+      return (
+        <>
+          <Link to="/stations">Create a station</Link> first - a camera with nowhere to stand never
+          reaches the wall.
+        </>
+      );
+    }
+    const placed = device.station_id ? stationById.get(device.station_id) : undefined;
+    if (placed && placed.line_id !== lineId) {
+      return `Still standing at ${placed.name} until you pick a station on this line.`;
+    }
+    if (!placed) return "No station, so this camera cannot start recording.";
+    return "The camera reads this placement. It never chooses it.";
+  }
+
+  const functionChoices = (current: string) => {
+    const catalog = FUNCTIONS.map((f) => f.value as string);
+    return catalog.includes(current) ? catalog : [current, ...catalog];
+  };
+
   const pending = people.filter((p) => p.role === "pending");
   const approved = people.filter((p) => p.role !== "pending");
 
@@ -294,6 +408,29 @@ export default function Admin({ profile }: { profile: Profile }) {
           Yes, make them an owner
         </button>
         <button type="button" className="btn btn--ghost" onClick={() => setConfirmOwnerId(null)}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  function confirmDeleteBanner(device: DeviceRow) {
+    return (
+      <div className="banner banner--warn" role="alert">
+        <span>
+          Delete removes {device.name} from the database entirely. It is for a phone paired by
+          mistake: once a camera has counted anything the database refuses, and its measurements are
+          kept either way. Unpair is the normal way to remove a camera.
+        </span>
+        <button
+          type="button"
+          className="btn btn--danger"
+          disabled={busy === device.id}
+          onClick={() => deleteCamera(device)}
+        >
+          Yes, delete this camera
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={() => setConfirmDeleteId(null)}>
           Cancel
         </button>
       </div>
@@ -471,7 +608,8 @@ export default function Admin({ profile }: { profile: Profile }) {
 
           <div className="banner banner--info">
             Open this site on the camera phone, tap "Use this device as a camera", then scan the QR
-            it shows with "Pair a camera". Unpairing keeps all of a camera's data.
+            it shows with "Pair a camera". You decide where every camera stands and what it does -
+            the phone only reads its assignment.
           </div>
 
           {loading ? (
@@ -497,8 +635,8 @@ export default function Admin({ profile }: { profile: Profile }) {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Recording now</th>
-                    <th>Default station</th>
+                    <th>On the line now</th>
+                    <th>Assignment</th>
                     <th>Status</th>
                     <th>
                       <span className="sr-only">Action</span>
@@ -508,49 +646,90 @@ export default function Admin({ profile }: { profile: Profile }) {
                 <tbody>
                   {devices.map((d) => {
                     const session = sessionByDevice.get(d.id);
-                    const actionHint = session ? RECORDING_HINT : IDLE_HINT;
+                    const lineId = chosenLine(d);
+                    const placedOnChosenLine =
+                      d.station_id !== null && stationById.get(d.station_id)?.line_id === lineId;
                     return (
                       <tr key={d.id}>
                         <td data-label="Name">{d.name}</td>
-                        <td data-label="Recording now">
+                        <td data-label="On the line now">
                           {session ? (
                             <div className="field">
-                              <span>{functionLabel(session.camera_function)}</span>
+                              <span className="pill pill--ok">running</span>
                               <span className="field__hint">
-                                {stationName(session.station_id)} · since {hhmm(session.started_at)}
+                                {session.station_name ?? stationName(session.station_id)} · since{" "}
+                                {hhmm(session.started_at)}
                               </span>
+                              <span className="field__hint">{evidenceLine(session)}</span>
                             </div>
                           ) : (
-                            <span className="pill pill--idle">not recording</span>
+                            <span className="pill pill--idle">idle</span>
                           )}
                         </td>
-                        <td data-label="Default station">
-                          <div className="field">
-                            <select
-                              className="field__input"
-                              aria-label={`Default station for ${d.name}`}
-                              value={d.station_id ?? ""}
-                              disabled={noStations || busy === d.id}
-                              onChange={(e) => assignStation(d, e.target.value || null)}
-                            >
-                              <option value="">— no station —</option>
-                              {stationChoices(d.station_id).map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.active ? s.name : `${s.name} (inactive)`}
-                                </option>
-                              ))}
-                            </select>
-                            {noStations ? (
-                              <span className="field__hint">
-                                <Link to="/stations">Create a station</Link> first - a camera with
-                                no station never reaches the wall.
-                              </span>
-                            ) : (
-                              <span className="field__hint">
-                                Pre-fills the camera's next session. It does not move a camera that
-                                is recording now.
-                              </span>
-                            )}
+                        <td data-label="Assignment">
+                          <div className="stack">
+                            <div className="field">
+                              <label className="field__label" htmlFor={`${formId}-line-${d.id}`}>
+                                Line
+                              </label>
+                              <select
+                                id={`${formId}-line-${d.id}`}
+                                className="field__input"
+                                value={lineId}
+                                disabled={noLines || busy === d.id}
+                                onChange={(e) =>
+                                  setLineDrafts((c) => ({ ...c, [d.id]: e.target.value }))
+                                }
+                              >
+                                <option value="">— choose a line —</option>
+                                {lineChoices(lineId).map((l) => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.active ? l.name : `${l.name} (inactive)`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="field">
+                              <label className="field__label" htmlFor={`${formId}-station-${d.id}`}>
+                                Station
+                              </label>
+                              <select
+                                id={`${formId}-station-${d.id}`}
+                                className="field__input"
+                                value={placedOnChosenLine ? (d.station_id ?? "") : ""}
+                                disabled={!lineId || busy === d.id}
+                                onChange={(e) => assignStation(d, e.target.value || null)}
+                              >
+                                <option value="">— no station —</option>
+                                {stationChoices(lineId, d.station_id).map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.active ? s.name : `${s.name} (inactive)`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="field">
+                              <label
+                                className="field__label"
+                                htmlFor={`${formId}-function-${d.id}`}
+                              >
+                                Job
+                              </label>
+                              <select
+                                id={`${formId}-function-${d.id}`}
+                                className="field__input"
+                                value={d.camera_function}
+                                disabled={busy === d.id}
+                                onChange={(e) => assignFunction(d, e.target.value)}
+                              >
+                                {functionChoices(d.camera_function).map((value) => (
+                                  <option key={value} value={value}>
+                                    {functionLabel(value)}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <span className="field__hint">{assignmentHint(d, lineId)}</span>
                           </div>
                         </td>
                         <td data-label="Status">
@@ -559,31 +738,43 @@ export default function Admin({ profile }: { profile: Profile }) {
                           </span>
                         </td>
                         <td>
-                          <div className="field">
-                            <div className="row">
-                              {session ? (
+                          {confirmDeleteId === d.id ? (
+                            confirmDeleteBanner(d)
+                          ) : (
+                            <div className="field">
+                              <div className="row">
+                                {session ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn--ghost"
+                                    disabled={busy === d.id}
+                                    onClick={() => endOpenSession(d, session)}
+                                  >
+                                    End session
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
-                                  className="btn btn--ghost"
+                                  className="btn"
                                   disabled={busy === d.id}
-                                  onClick={() => endOpenSession(d, session)}
+                                  onClick={() => setRevoked(d.id, !d.revoked_at)}
                                 >
-                                  End session
+                                  {d.revoked_at ? "Re-activate" : "Unpair"}
                                 </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="btn"
-                                disabled={busy === d.id}
-                                onClick={() => setRevoked(d.id, !d.revoked_at)}
-                              >
-                                {d.revoked_at ? "Re-activate" : "Unpair"}
-                              </button>
+                                <button
+                                  type="button"
+                                  className="btn btn--danger"
+                                  disabled={busy === d.id}
+                                  onClick={() => setConfirmDeleteId(d.id)}
+                                >
+                                  Delete camera
+                                </button>
+                              </div>
+                              <span className="field__hint">
+                                {session ? `${RECORDING_HINT}${REMOVAL_HINT}` : REMOVAL_HINT}
+                              </span>
                             </div>
-                            {d.revoked_at ? null : (
-                              <span className="field__hint">{actionHint}</span>
-                            )}
-                          </div>
+                          )}
                         </td>
                       </tr>
                     );

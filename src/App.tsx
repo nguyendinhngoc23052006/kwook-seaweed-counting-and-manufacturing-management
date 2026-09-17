@@ -58,7 +58,7 @@ export default function App() {
   // but its own row until an owner grants it a role in Cameras.
   if (profile.kind === "human" && profile.role === "pending") {
     return (
-      <div className="wrap">
+      <div className="wrap wrap--narrow">
         <div className="empty">
           <h1 className="empty__title">Waiting for approval</h1>
           <p className="empty__body">

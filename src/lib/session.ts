@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient";
 
-export type DeviceRole = "provisioning" | "counting" | "compliance" | "overview";
+export type CameraFunction = "provisioning" | "counting" | "compliance" | "overview";
 export type HumanRole = "pending" | "viewer" | "supervisor" | "manager" | "owner";
 
 export interface Profile {
@@ -15,17 +15,16 @@ export interface DeviceConfig {
   id: string;
   tenant_id: string;
   name: string;
-  role: DeviceRole;
-  station_id: string | null;
   revoked_at: string | null;
 }
 
-// The device's role comes from its own row, never from the URL. A device that
-// could name its own role could name a different one.
+// Identity only. What this camera does and where it stands is the owner's to
+// set, so it is read from the same devices row by loadAssignment and snapshotted
+// onto the session server-side - never chosen here, and never held twice.
 export async function loadDeviceConfig(profileId: string): Promise<DeviceConfig | null> {
   const { data, error } = await supabase()
     .from("devices")
-    .select("id, tenant_id, name, role, station_id, revoked_at")
+    .select("id, tenant_id, name, revoked_at")
     .eq("id", profileId)
     .maybeSingle();
   if (error) throw error;

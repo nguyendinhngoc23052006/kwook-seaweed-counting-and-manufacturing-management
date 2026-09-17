@@ -442,3 +442,13 @@ enabled = true
 # The platform verifies the caller's JWT before the function runs; the function
 # additionally checks the caller is a human admin.
 verify_jwt = true
+
+# Signalling proxy for the live wall view: it holds the Cloudflare Realtime App
+# Secret and returns only SDP answers, so nothing about the Realtime app reaches
+# a browser. The platform verifies the caller's JWT; the function additionally
+# checks the caller is an unrevoked device with an open capture session of its
+# own. With REALTIME_SFU_APP_ID / REALTIME_SFU_APP_SECRET unset it answers
+# { configured: false } and the whole feature stays inert.
+[functions.stream-signal]
+enabled = true
+verify_jwt = true

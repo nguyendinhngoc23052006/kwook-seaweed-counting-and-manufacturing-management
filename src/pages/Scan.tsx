@@ -46,7 +46,7 @@ export default function Scan({ profile }: { profile: Profile }) {
 
   if (profile.role !== "owner") {
     return (
-      <div className="wrap">
+      <div className="wrap wrap--narrow">
         <div className="empty">
           <h2 className="empty__title">Owner access required</h2>
           <p className="empty__body">
@@ -75,7 +75,7 @@ export default function Scan({ profile }: { profile: Profile }) {
   }
 
   return (
-    <div className="wrap">
+    <div className="wrap wrap--narrow">
       <div className="stack">
         <h1 className="h1">Scan a camera's QR</h1>
         <p className="muted">
