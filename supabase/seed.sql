@@ -74,6 +74,28 @@ update profiles
  where id in ('22222222-2222-2222-2222-222222222222'::uuid,
               '33333333-3333-3333-3333-333333333333'::uuid);
 
+-- The demo floor. This used to live in migration 20260915080000, which meant
+-- production would have been born with it; 20260917100000 removed it there and
+-- it lives here instead, because a seed reaches preview branches only.
+insert into lines (tenant_id, name)
+select id, 'Line A' from tenants
+union all
+select id, 'Plant' from tenants
+on conflict do nothing;
+
+-- stations carries no unique constraint on (tenant, name), so `on conflict`
+-- has nothing to key on and a second seed run would duplicate the floor.
+insert into stations (tenant_id, line_id, name, kind)
+select t.id, l.id, f.name, f.kind
+  from tenants t
+  join (values ('Line A', 'Belt 1', 'Belt'),
+               ('Line A', 'Portioning 1', 'Tray table'),
+               ('Plant',  'Main door', 'Doorway')) as f(line, name, kind) on true
+  join lines l on l.tenant_id = t.id and l.name = f.line
+ where not exists (
+   select 1 from stations s where s.tenant_id = t.id and s.name = f.name
+ );
+
 -- The ::uuid casts are required: INSERT ... SELECT does not coerce a string
 -- literal to the target column's type the way a plain VALUES insert does.
 insert into devices (id, tenant_id, name, camera_function, station_id)

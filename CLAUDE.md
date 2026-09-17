@@ -27,11 +27,21 @@ PR.
 
 1. **Device accounts are write-only.** No `SELECT` policy on event tables, ever.
    A device credential lives on an unattended phone on a factory floor.
-2. **Role comes from the server.** `devices.role`, never a URL parameter.
+2. **A camera's function comes from the server.** `devices.camera_function`, set
+   by the owner and stamped onto the session by trigger — never a URL parameter,
+   never the camera's own choice. The owner is the single placement authority:
+   line, station and function are decided in one place and the phone displays
+   them.
 3. **`algorithm_version` on every count row.** The counter will be tuned; a month
    must be comparable or provably not.
-4. **Client-generated UUID per event**, written with upsert. A retry after a
-   dropped connection must never double-count.
+4. **A deterministic UUID per event, written with a plain `insert`.** Derive the
+   id from the event's natural key — `count_minutes` uses (device, minute) — so a
+   retry after a dropped connection lands on the row the server already has and
+   the unique constraint absorbs it. Never `upsert`: PostgREST renders it as
+   `ON CONFLICT DO UPDATE`, which Postgres plans as needing UPDATE *and* a
+   passing SELECT policy — both of which rule 1 denies a device, so every write
+   fails `42501`. The database, not the client, is what guarantees a minute
+   cannot be counted twice.
 5. **The stream never degrades analytics.** Cap sender bitrate. SFU down does not
    mean counting down.
 6. **No audio, ever. No stored live video.**
@@ -128,8 +138,12 @@ PR.
   and a spinner, so account spam is structurally impossible. The machine is the
   devices ROW, not the phone: unpair (`revoked_at`) cuts the phone off in the
   database itself (`is_active_device()` in every device write policy) and keeps
-  every row the camera ever wrote. There is deliberately no device delete — it
-  would cascade into history.
+  every row the camera ever wrote. A camera is an **instrument, not a parent**:
+  every FK from a measurement to `devices` or `stations` is `ON DELETE RESTRICT`
+  and `delete` is revoked on both, so deleting a camera that has counted anything
+  — from the API *or* from a dashboard click on its auth user — is refused rather
+  than silently destroying the measurements. A camera that never counted can be
+  deleted outright; the database, not the UI, decides which case you are in.
 - **Demo credentials live only in `supabase/seed.sql`**, which Supabase never
   applies to production and does not apply to persistent branches without an
   explicit `[remotes.<name>.db.seed]` block. Never seed a real environment.
