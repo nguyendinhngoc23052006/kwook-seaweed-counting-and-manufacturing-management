@@ -1,12 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { coverage, type MinuteRow, perMinuteSeries, ratePerHour, totalFor } from "./counts";
+import {
+  clockDriftSeconds,
+  coverage,
+  isClockDrifting,
+  type MinuteRow,
+  perMinuteSeries,
+  ratePerHour,
+  totalFor,
+} from "./counts";
 
-function row(minute: string, count: number, deviceId = "dev-a"): MinuteRow {
+// 60s of skew is what a correctly-set phone produces: the minute key is the
+// minute's start and the row is posted once the minute is over.
+function row(
+  minute: string,
+  count: number,
+  deviceId = "dev-a",
+  skew: number | null = 60,
+): MinuteRow {
   return {
     minute,
     count,
     device_id: deviceId,
     station_id: "st-a",
+    skew_seconds: skew,
     achieved_fps: 12,
     tracks_created: count + 2,
     tracks_counted: count,
@@ -123,5 +139,78 @@ describe("coverage", () => {
   it("clamps to 1 when more minutes reported than expected", () => {
     const rows = [row("2026-09-16T08:00:00Z", 1), row("2026-09-16T08:01:00Z", 1)];
     expect(coverage(rows, 1)).toBe(1);
+  });
+});
+
+describe("clockDriftSeconds", () => {
+  it("is null when no row carries a skew", () => {
+    expect(clockDriftSeconds([])).toBeNull();
+    expect(clockDriftSeconds([row("2026-09-16T08:00:00Z", 5, "dev-a", null)])).toBeNull();
+  });
+
+  it("reads a promptly-delivered minute as no drift", () => {
+    expect(clockDriftSeconds([row("2026-09-16T08:00:00Z", 5, "dev-a", 60)])).toBe(0);
+  });
+
+  it("takes the smallest skew, so a late flush does not look like a bad clock", () => {
+    const rows = [
+      // An outage: these three sat in the outbox for most of an hour.
+      row("2026-09-16T08:00:00Z", 5, "dev-a", 3600),
+      row("2026-09-16T08:01:00Z", 5, "dev-a", 3540),
+      row("2026-09-16T08:02:00Z", 5, "dev-a", 3480),
+      // Then the network came back and this one went straight up.
+      row("2026-09-16T08:03:00Z", 5, "dev-a", 62),
+    ];
+    expect(clockDriftSeconds(rows)).toBe(2);
+  });
+
+  it("is negative for a phone running fast", () => {
+    expect(clockDriftSeconds([row("2026-09-16T08:00:00Z", 5, "dev-a", -540)])).toBe(-600);
+  });
+
+  it("ignores rows written before the column existed", () => {
+    const rows = [
+      row("2026-09-16T08:00:00Z", 5, "dev-a", null),
+      row("2026-09-16T08:01:00Z", 5, "dev-a", 900),
+    ];
+    expect(clockDriftSeconds(rows)).toBe(840);
+  });
+});
+
+describe("isClockDrifting", () => {
+  it("is false with no skew data at all", () => {
+    expect(isClockDrifting([])).toBe(false);
+    expect(isClockDrifting([row("2026-09-16T08:00:00Z", 5, "dev-a", null)])).toBe(false);
+  });
+
+  it("is false for prompt delivery", () => {
+    expect(isClockDrifting([row("2026-09-16T08:00:00Z", 5, "dev-a", 95)])).toBe(false);
+  });
+
+  it("is false for a two-hour outage that flushed and then delivered promptly", () => {
+    expect(
+      isClockDrifting([
+        row("2026-09-16T08:00:00Z", 5, "dev-a", 7200),
+        row("2026-09-16T08:01:00Z", 5, "dev-a", 70),
+      ]),
+    ).toBe(false);
+  });
+
+  it("is true for a phone whose every minute arrives far too late to be delay", () => {
+    expect(
+      isClockDrifting([
+        row("2026-09-16T08:00:00Z", 5, "dev-a", 1260),
+        row("2026-09-16T08:01:00Z", 5, "dev-a", 1262),
+      ]),
+    ).toBe(true);
+  });
+
+  it("is true for a phone running fast, which delay can never explain", () => {
+    expect(isClockDrifting([row("2026-09-16T08:00:00Z", 5, "dev-a", -300)])).toBe(true);
+  });
+
+  it("does not fire on the threshold itself", () => {
+    expect(isClockDrifting([row("2026-09-16T08:00:00Z", 5, "dev-a", 240)])).toBe(false);
+    expect(isClockDrifting([row("2026-09-16T08:00:00Z", 5, "dev-a", 241)])).toBe(true);
   });
 });

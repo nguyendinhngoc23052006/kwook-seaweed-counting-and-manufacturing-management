@@ -52,7 +52,7 @@ export default function Pair() {
   }, []);
 
   return (
-    <div className="wrap">
+    <div className="wrap wrap--narrow">
       <div className="stack">
         <h1 className="h1">Pair this camera</h1>
         <p className="muted">
@@ -66,7 +66,7 @@ export default function Pair() {
           </div>
         ) : null}
 
-        <div className="card">
+        <div className="card qr">
           <canvas ref={canvasRef} />
         </div>
 

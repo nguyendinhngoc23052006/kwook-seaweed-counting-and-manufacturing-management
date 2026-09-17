@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Shell, { atLeast } from "../components/Shell";
-import { coverage, type MinuteRow, perMinuteSeries, ratePerHour, totalFor } from "../lib/counts";
+import {
+  clockDriftSeconds,
+  coverage,
+  isClockDrifting,
+  type MinuteRow,
+  perMinuteSeries,
+  ratePerHour,
+  totalFor,
+} from "../lib/counts";
 import { errorMessage } from "../lib/errorMessage";
 import { functionLabel } from "../lib/functionsCatalog";
 import { loadMinutesSince } from "../lib/loadMinutes";
@@ -18,30 +26,25 @@ const STRIP_PX = 56;
 interface StationRow {
   id: string;
   name: string;
-  line: string;
+  line_id: string | null;
   kind: string;
   active: boolean;
 }
 
-interface DeviceRow {
+interface LineRow {
   id: string;
   name: string;
-  last_seen_at: string | null;
-}
-
-// What is recording here right now: an open session and the phone holding it.
-// devices.station_id is only the default that session was pre-filled with, so a
-// phone whose default is another station still shows up here while its session
-// points at this one.
-interface ActiveCamera {
-  session: CaptureSession;
-  device: DeviceRow;
 }
 
 interface Snapshot {
   station: StationRow | null;
-  devices: DeviceRow[];
-  sessions: CaptureSession[];
+  // Resolved from the lines table, not from a text column on the station: a
+  // line is a row now (migration 20260917091000) and two spellings of one name
+  // are no longer two lines.
+  lineName: string | null;
+  // At most one, and the database says so: capture_sessions_one_open_per_station
+  // is a unique index, so two phones can no longer both count this station.
+  session: CaptureSession | null;
   hour: MinuteRow[];
   today: MinuteRow[];
   truncated: boolean;
@@ -49,36 +52,17 @@ interface Snapshot {
   toIso: string;
 }
 
-// Same thresholds the wall uses: over 10 minutes silent is down, over 2 is
-// stale.
-function health(lastSeen: number | null): { label: string; cls: string } {
-  if (lastSeen === null) return { label: "never seen", cls: "pill--crit" };
-  const minutes = (Date.now() - lastSeen) / MINUTE_MS;
-  if (minutes > 10) return { label: `down ${Math.round(minutes)}m`, cls: "pill--crit" };
-  if (minutes > 2) return { label: `stale ${Math.round(minutes)}m`, cls: "pill--warn" };
-  return { label: "live", cls: "pill--ok" };
-}
-
-function seenAt(device: DeviceRow): number | null {
-  if (!device.last_seen_at) return null;
-  const t = new Date(device.last_seen_at).getTime();
-  return Number.isNaN(t) ? null : t;
-}
-
-const SEVERITY: Record<string, number> = { "pill--ok": 0, "pill--warn": 1, "pill--crit": 2 };
-
-// A station is only as healthy as its worst recording camera: one dead camera
-// means counts are missing however well its neighbour is doing. With no open
-// session the station is off the line in that instant - the end of a shift is
-// not a fault, so it never ages into "stale". The wall derives it the same way,
-// so the two screens never disagree about one station.
-function stationState(cameras: ActiveCamera[]): { label: string; cls: string } {
-  let worst: { label: string; cls: string } | null = null;
-  for (const camera of cameras) {
-    const state = health(seenAt(camera.device));
-    if (!worst || (SEVERITY[state.cls] ?? 0) > (SEVERITY[worst.cls] ?? 0)) worst = state;
-  }
-  return worst ?? { label: "off", cls: "pill--idle" };
+// The same reading the wall takes, so the two screens never disagree about one
+// station: the open session is what this station is doing, and its own evidence
+// (last_evidence_at, advanced by every heartbeat) is how alive it is. No open
+// session is "off" - a shift that ended, not a fault.
+function sessionState(session: CaptureSession | null): { label: string; cls: string } {
+  if (!session) return { label: "off", cls: "pill--idle" };
+  const evidence = session.last_evidence_at ?? session.started_at;
+  const minutes = (Date.now() - new Date(evidence).getTime()) / MINUTE_MS;
+  if (minutes > 10) return { label: `silent ${Math.round(minutes)}m`, cls: "pill--crit" };
+  if (minutes > 2) return { label: `quiet ${Math.round(minutes)}m`, cls: "pill--warn" };
+  return { label: "running", cls: "pill--ok" };
 }
 
 function hhmm(iso: string): string {
@@ -107,25 +91,23 @@ export default function Station({ profile }: { profile: Profile }) {
 
       const client = supabase();
       try {
-        const [station, devices, openSessions, hour, today] = await Promise.all([
+        const [station, lines, openSessions, hour, today] = await Promise.all([
           client
             .from("stations")
-            .select("id, name, line, kind, active")
+            .select("id, name, line_id, kind, active")
             .eq("id", stationId)
             .maybeSingle(),
-          // Every paired phone, not just the ones whose default is this station:
-          // the session decides where a camera is recording, and this read only
-          // supplies the name and heartbeat behind it. A revoked camera cannot
-          // write, so its last heartbeat would hold a dead station at "live"
-          // forever; the wall filters them the same way.
-          client.from("devices").select("id, name, last_seen_at").is("revoked_at", null),
+          client.from("lines").select("id, name"),
+          // No devices read: the session carries the phone's label and its own
+          // evidence, and revoking a phone closes its sessions in the database
+          // (migration 20260916170000), so an open session is a live camera.
           loadOpenSessions(),
           loadMinutesSince(fromIso, stationId),
           loadMinutesSince(midnight.toISOString(), stationId),
         ]);
         if (cancelled) return;
 
-        const failed = station.error ?? devices.error;
+        const failed = station.error ?? lines.error;
         if (failed) {
           // Keep the last good snapshot on screen; a blank wall is worse than a
           // stale one, and the banner says which it is.
@@ -133,10 +115,12 @@ export default function Station({ profile }: { profile: Profile }) {
           return;
         }
         setError(null);
+        const row = (station.data as StationRow | null) ?? null;
+        const lineRows = (lines.data as LineRow[]) ?? [];
         setSnap({
-          station: (station.data as StationRow | null) ?? null,
-          devices: (devices.data as DeviceRow[]) ?? [],
-          sessions: openSessions.filter((session) => session.station_id === stationId),
+          station: row,
+          lineName: lineRows.find((line) => line.id === row?.line_id)?.name ?? null,
+          session: openSessions.find((session) => session.station_id === stationId) ?? null,
           hour: hour.rows,
           today: today.rows,
           truncated: hour.truncated || today.truncated,
@@ -227,19 +211,14 @@ export default function Station({ profile }: { profile: Profile }) {
     );
   }
 
-  const { station, devices, sessions, hour, today, truncated, fromIso, toIso } = snap;
-  const byId = new Map(devices.map((device) => [device.id, device]));
-  // A session whose device is missing here is one the revoke trigger is closing:
-  // the phone is already cut off, so it is not on the line either.
-  const running = sessions.flatMap<ActiveCamera>((session) => {
-    const device = byId.get(session.device_id);
-    return device ? [{ session, device }] : [];
-  });
+  const { station, lineName, session, hour, today, truncated, fromIso, toIso } = snap;
   const series = perMinuteSeries(hour, fromIso, toIso);
   const peak = series.reduce((max, point) => Math.max(max, point.count), 0);
   const covered = coverage(hour, WINDOW_MINUTES);
   const reported = Math.round(covered * WINDOW_MINUTES);
-  const state = stationState(running);
+  const state = sessionState(session);
+  const drifting = isClockDrifting(hour);
+  const driftMinutes = Math.round(Math.abs(clockDriftSeconds(hour) ?? 0) / 60);
 
   return (
     <Shell profile={profile} active="wall">
@@ -256,7 +235,7 @@ export default function Station({ profile }: { profile: Profile }) {
         <div className="section__head">
           <div>
             <h1 className="h1">{station.name}</h1>
-            <p className="muted">Line {station.line}</p>
+            <p className="muted">{lineName ?? "No line yet"}</p>
           </div>
           <div className="row">
             <span className="pill pill--idle">{kindLabel(station.kind)}</span>
@@ -264,7 +243,7 @@ export default function Station({ profile }: { profile: Profile }) {
           </div>
         </div>
 
-        {running.length === 0 ? (
+        {!session ? (
           <div className="empty">
             <h2 className="empty__title">No camera is recording here</h2>
             <p className="empty__body">
@@ -278,15 +257,10 @@ export default function Station({ profile }: { profile: Profile }) {
           </div>
         ) : (
           <div className="row">
-            {running.map(({ session, device }) => {
-              const beat = health(seenAt(device));
-              return (
-                <span className={`pill ${beat.cls}`} key={session.id}>
-                  {device.name} · {functionLabel(session.camera_function)} · since{" "}
-                  {hhmm(session.started_at)} · {beat.label}
-                </span>
-              );
-            })}
+            <span className={`pill ${state.cls}`}>
+              {session.device_label ?? "Camera"} · {functionLabel(session.camera_function)} · since{" "}
+              {hhmm(session.started_at)} · {state.label}
+            </span>
           </div>
         )}
 
@@ -326,6 +300,19 @@ export default function Station({ profile }: { profile: Profile }) {
           </span>
           {covered < 0.9 ? (
             <span className="muted">The figures above cover only the minutes that reported.</span>
+          ) : null}
+          {/* A phone whose clock is out writes perfectly well-formed rows
+              against minutes that never happened here, so the strip below shows
+              a hole and a spike where one steady shift actually ran. Nothing
+              else on this page reveals it. */}
+          {drifting ? (
+            <>
+              <span className="pill pill--warn">camera clock drifting</span>
+              <span className="muted">
+                Minutes are arriving about {driftMinutes} minute{driftMinutes === 1 ? "" : "s"} out,
+                so they are filed against the wrong time.
+              </span>
+            </>
           ) : null}
         </div>
 

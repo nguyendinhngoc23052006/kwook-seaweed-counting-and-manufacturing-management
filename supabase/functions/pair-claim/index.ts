@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     id: deviceId,
     tenant_id: caller.tenant_id,
     name: name.trim(),
-    role: func,
+    camera_function: func,
     station_id: station_id || null,
   });
   if (deviceError) return reply(500, { error: `Device: ${deviceError.message}` });

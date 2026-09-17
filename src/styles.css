@@ -233,6 +233,23 @@ table td {
   padding: var(--space-5) max(var(--space-4), env(safe-area-inset-right)) var(--space-6)
     max(var(--space-4), env(safe-area-inset-left));
 }
+/* One card is the whole screen (pairing, sign-in, claiming, waiting): at 1100px
+   it strands itself against the left edge of a desktop line. */
+.wrap--narrow {
+  max-width: 460px;
+}
+
+/* The pairing QR is a canvas sized by width/height ATTRIBUTES, which no
+   stylesheet rule constrains; centre it and cap it so 260px of code cannot run
+   off a 360px phone. */
+.qr {
+  display: flex;
+  justify-content: center;
+}
+.qr canvas {
+  max-width: 100%;
+  height: auto;
+}
 
 /* The default vertical rhythm — children need no margins of their own. */
 .stack {
