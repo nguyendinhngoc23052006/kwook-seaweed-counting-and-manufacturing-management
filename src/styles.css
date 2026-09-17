@@ -157,8 +157,12 @@ table td {
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  /* gap first: the shorthand resets row-gap, so declaring row-gap above it
+     would be silently discarded. */
   gap: var(--space-2);
+  row-gap: var(--space-1);
   min-height: 56px;
   padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) var(--space-2)
     max(var(--space-3), env(safe-area-inset-left));
@@ -167,7 +171,7 @@ table td {
   box-shadow: var(--shadow-1);
 }
 .appbar__brand {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   /* On /capture the brand is the operator-entered camera name, so it must be
      allowed to shrink rather than widen the bar past the viewport. */
   min-width: 0;
@@ -186,24 +190,46 @@ table td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Never wraps: on a 360px phone the links scroll sideways instead. */
+/* The nav gets its own full-width row on a phone.
+   It used to be the only shrinkable child of a single-row bar, with
+   overflow-x: auto and the scrollbar hidden - so at 400px the brand, the
+   account name and Sign out ate the width and Stations and Cameras scrolled
+   out of sight with nothing on screen suggesting they existed. The owner was
+   left on the Wall with no way to reach their own floor. Primary navigation
+   must never depend on a gesture the interface does not advertise. */
 .appbar__nav {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 0 100%;
+  order: 10;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  overflow-x: auto;
-  /* overflow-x makes this a scroll container in both axes, which would clip the
-     3px focus ring at its 2px offset; the padding gives the ring room and the
-     negative margin gives the space back to the bar. */
+  /* Room for the 3px focus ring at its 2px offset. */
   padding: 5px 0;
-  margin: -5px 0;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  margin: -5px 0 calc(var(--space-1) * -1) 0;
 }
-.appbar__nav::-webkit-scrollbar {
+@media (min-width: 720px) {
+  /* Wide enough for one row: the nav sits inline beside the brand again. */
+  .appbar__nav {
+    flex: 0 1 auto;
+    order: 0;
+    margin: -5px 0;
+  }
+}
+/* Who is signed in costs a whole row on a phone once the account name is long,
+   and it is the least useful thing in the bar there - the owner knows who they
+   are. Sign out stays. */
+.appbar__who {
   display: none;
+}
+/* Only once there is room for it beside the nav without pushing the bar onto a
+   second row - measured, not guessed: at 768px the brand, nav, a long account
+   name and Sign out still wrapped. */
+@media (min-width: 1024px) {
+  .appbar__who {
+    display: inline;
+    max-width: 20ch;
+  }
 }
 .appbar__spacer {
   flex: 1 1 auto;
