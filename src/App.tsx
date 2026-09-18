@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { errorMessage } from "./lib/errorMessage";
 import { loadProfile, type Profile } from "./lib/session";
 import { supabase } from "./lib/supabaseClient";
+import { OrgApp } from "./org/OrgApp";
 import Admin from "./pages/Admin";
 import Capture from "./pages/Capture";
 import Claim from "./pages/Claim";
@@ -32,6 +33,11 @@ export default function App() {
   // Pairing renders before the auth gate too: a camera-to-be has no session -
   // it shows a QR and receives one when an admin claims it.
   if (window.location.pathname === "/pair") return <Pair />;
+  // The org-admin section (org chart, capabilities, cameras, hiring, tasks)
+  // is a self-contained sibling app: its own providers, its own auth/capability
+  // gate against the persons/org_nodes model, entirely separate from the
+  // profiles-table gate below that the device/wall/admin pages use.
+  if (window.location.pathname.startsWith("/org")) return <OrgApp />;
 
   if (loading) {
     return (

@@ -10,7 +10,8 @@
 // Pull the message out by SHAPE rather than by class, and keep the SQLSTATE
 // code: "permission denied for table profiles (42501)" is diagnosable, the
 // bare message alone is not.
-export function errorMessage(e: unknown): string {
+export function errorMessage(e: unknown, fallback?: string): string {
+  if (e === null || e === undefined) return fallback ?? String(e);
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
 

@@ -11,9 +11,17 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "recommended": true }
+    "rules": {
+      "recommended": true,
+      "suspicious": { "noArrayIndexKey": "warn" },
+      "a11y": {
+        "noStaticElementInteractions": "warn",
+        "useAriaPropsSupportedByRole": "warn"
+      }
+    }
   },
   "javascript": {
     "formatter": { "quoteStyle": "double" }
-  }
+  },
+  "css": { "parser": { "tailwindDirectives": true } }
 }
