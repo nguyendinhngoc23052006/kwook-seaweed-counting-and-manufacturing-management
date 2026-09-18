@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { JSX } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { I18nProvider } from "../lib/i18n";
 import { queryClient } from "../lib/query";
 import { OrgErrorBoundary } from "../org/OrgErrorBoundary";
@@ -17,12 +17,13 @@ export function PublicJobsApp(): JSX.Element {
     <OrgErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
-          <BrowserRouter basename="/careers">
+          <BrowserRouter>
             <Routes>
               <Route path="/" element={<PublicLayout />}>
                 <Route index element={<HomePage />} />
                 <Route path="jobs/:jobId" element={<JobDetailPage />} />
                 <Route path="jobs/:jobId/apply" element={<ApplyPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
           </BrowserRouter>
