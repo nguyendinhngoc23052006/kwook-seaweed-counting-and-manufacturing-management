@@ -315,3 +315,57 @@ export function managerSeatChoices(
 export function hasRootSeat(nodes: OrgTreeNode[]): boolean {
   return nodes.some((n) => n.seats.some((seat) => seat.reports_to === null));
 }
+
+// --- Chart search --------------------------------------------------------
+// Vietnamese text search needs its own fold: NFD alone leaves the
+// combining marks and the letter đ/Đ, which NFD does not decompose, before a
+// plain substring test.
+export function foldSearchText(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+}
+
+function nodeSearchText(node: OrgTreeNode): string {
+  const seatText = node.seats
+    .map((s) => `${s.title} ${s.person_name ?? ""} ${s.employee_code ?? ""}`)
+    .join(" ");
+  return foldSearchText(`${node.name} ${node.name_en ?? ""} ${seatText}`);
+}
+
+// One fold per node, done once per snapshot rather than once per keystroke --
+// the search box calls this behind a useMemo keyed on the snapshot, then
+// matchingNodeIds() below does a cheap substring scan on every keystroke.
+export function buildSearchIndex(nodes: OrgTreeNode[]): Map<string, string> {
+  return new Map(nodes.map((n) => [n.id, nodeSearchText(n)]));
+}
+
+export function matchingNodeIds(index: Map<string, string>, query: string): Set<string> {
+  const q = foldSearchText(query.trim());
+  if (!q) return new Set();
+  const matches = new Set<string>();
+  for (const [id, text] of index) {
+    if (text.includes(q)) matches.add(id);
+  }
+  return matches;
+}
+
+// Every node that must be expanded (children visible) for every match to be
+// reachable from a root -- the strict ancestors of each match. The match
+// itself needs no entry here: its own box always renders once its parent is
+// expanded; only its children need a reason to show, and search doesn't force
+// those open. Builds the id lookup once rather than calling breadcrumbOf per
+// match, which would rebuild it on every call.
+export function ancestorsToExpand(nodes: OrgTreeNode[], matchedIds: Set<string>): Set<string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const expand = new Set<string>();
+  for (const id of matchedIds) {
+    const match = byId.get(id);
+    let current = match?.parent_id ? byId.get(match.parent_id) : undefined;
+    let depth = 0;
+    while (current && depth < 100000) {
+      expand.add(current.id);
+      current = current.parent_id ? byId.get(current.parent_id) : undefined;
+      depth += 1;
+    }
+  }
+  return expand;
+}

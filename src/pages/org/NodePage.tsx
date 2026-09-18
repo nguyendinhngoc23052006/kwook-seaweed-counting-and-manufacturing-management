@@ -333,6 +333,16 @@ export function NodePage(): JSX.Element {
   const canSeeCameras =
     capabilityReaches(myReach, "manage_camera_devices", node.id) ||
     capabilityReaches(myReach, "view_camera_data", node.id);
+  // capabilityReaches() is true for an admin everywhere, whether or not this
+  // node itself was ever granted the capability -- correct (an admin really
+  // can reach every node), but showing the link with no distinction reads as
+  // "this node has camera access" when the ledger right below it may say
+  // "Chưa cấp". node.capabilities carries only this node's own EXPLICIT
+  // grants (no inheritance), so it's the one signal that tells the two cases
+  // apart without another query.
+  const hasExplicitCameraGrant =
+    node.capabilities.includes("manage_camera_devices") ||
+    node.capabilities.includes("view_camera_data");
   const canMaintainProfile = capabilityReaches(myReach, "maintain_person_profile", node.id);
   const canMaintainBank = capabilityReaches(myReach, "maintain_bank_details", node.id);
 
@@ -643,7 +653,14 @@ export function NodePage(): JSX.Element {
       </Section>
 
       {canSeeCameras && (
-        <Section title={t("device.admin_title")}>
+        <Section
+          title={t("device.admin_title")}
+          action={
+            !hasExplicitCameraGrant ? (
+              <Pill tone="accent">{t("device.admin_access_only")}</Pill>
+            ) : undefined
+          }
+        >
           <ListRows>
             <ListRow to={`/org/node/${node.id}/cameras`} title={t("device.admin_title")} />
           </ListRows>
