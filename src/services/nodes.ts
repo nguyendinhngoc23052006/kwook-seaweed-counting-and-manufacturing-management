@@ -299,6 +299,26 @@ export function breadcrumbOf(nodes: OrgTreeNode[], nodeId: string): OrgTreeNode[
   return trail;
 }
 
+// A node is "effectively active" only if it, and every ancestor above it, has
+// active = true (20260924000000_freeze_inactive_subtrees.sql,
+// org_node_effectively_active) -- deactivating a node never cascades the
+// column to its children, so a child under an inactive parent still reads
+// active=true on its own row. Same iterative walk-up-the-parent-chain shape as
+// breadcrumbOf, depth-capped the same way; every write-gating check in the UI
+// imports this rather than re-walking parent_id itself.
+export function isNodeEffectivelyActive(nodes: OrgTreeNode[], nodeId: string): boolean {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  let current = byId.get(nodeId);
+  if (!current) return false;
+  let depth = 0;
+  while (current && depth < 100000) {
+    if (!current.active) return false;
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+    depth += 1;
+  }
+  return true;
+}
+
 // Seats a new seat in this node may report to: its own, then every ancestor's.
 // Ancestors come first because that is where a manager usually sits.
 export function managerSeatChoices(
