@@ -1,0 +1,167 @@
+# Copied from the guide's templates/workflows/. Substitute VITE_.
+# Job name "deploy-production" is required BY NAME by the main ruleset (Part 2
+# step 11).
+name: deploy-production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      # A merge can land before its checks finish, so gate the release on THIS
+      # commit's own check runs rather than trusting that the PR was green.
+      #
+      # A named check that does not exist AT ALL is skipped, not waited for.
+      # Part 2 builds these workflows in order: this file lands at step 8, and
+      # ci.yml / e2e.yml arrive at step 10. Waiting for a check nobody has
+      # created yet would hang every deploy for the length of the setup. The
+      # ruleset (step 11) is what makes a check required for MERGE; this gate's
+      # only job is to refuse to deploy a commit whose checks FAILED.
+      - name: Wait for this commit's checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          REQUIRED="tests lint typecheck e2e"
+          # Grace window: right after a merge, check runs may not be registered
+          # yet. Without this, "nothing is pending" is trivially true and the
+          # gate waves the commit through before CI has started.
+          sleep 30
+          PENDING=1
+          for _ in $(seq 1 60); do   # 60 * 20s = 20 minutes
+            # --fail plus the emptiness check below: without them a network
+            # blip returns an empty body, every check reads as "absent", and a
+            # commit with real failures deploys. Retry instead of assuming green.
+            RUNS=$(curl -sS --fail --max-time 30 -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/commits/$SHA/check-runs?per_page=100") || RUNS=""
+            if [ -z "$RUNS" ]; then
+              echo "could not read check runs for $SHA - retrying"
+              PENDING=1
+              sleep 20
+              continue
+            fi
+            PENDING=0
+            FAILED=""
+            for JOB in $REQUIRED; do
+              # (.check_runs // []) guards against an error object: a bare
+              # .check_runs[] would raise "Cannot iterate over null" and, under
+              # set -e, kill the deploy instead of retrying.
+              STATUS=$(printf '%s' "$RUNS" | jq -r --arg j "$JOB" \
+                '[(.check_runs // [])[] | select(.name == $j)] | last | .status // "absent"' || echo absent)
+              CONCL=$(printf '%s' "$RUNS" | jq -r --arg j "$JOB" \
+                '[(.check_runs // [])[] | select(.name == $j)] | last | .conclusion // ""' || echo "")
+              case "$STATUS" in
+                absent)
+                  echo "note: no '$JOB' check on this commit - not configured yet, skipping" ;;
+                completed)
+                  # A required check skipped by its own job-level `if:` reports
+                  # as success — that is what makes deploy-preview's Dependabot
+                  # guard work (Verified 2026-07-23; see Part 7's Dependabot entry).
+                  case "$CONCL" in success|skipped) ;; *) FAILED="$FAILED $JOB($CONCL)" ;; esac ;;
+                *) PENDING=1 ;;
+              esac
+            done
+            if [ -n "$FAILED" ]; then
+              echo "Refusing to deploy. Failed checks on $SHA:$FAILED"
+              exit 1
+            fi
+            [ "$PENDING" -eq 0 ] && { echo "No failing or in-flight checks on $SHA"; break; }
+            sleep 20
+          done
+          [ "$PENDING" -eq 0 ] || { echo "Timed out waiting for checks on $SHA"; exit 1; }
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      # BLUE: upload a version WITHOUT sending it any traffic. No --env staging
+      # here - that flag would upload to the staging Worker instead.
+      - name: Upload production version
+        id: upload
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload
+
+      # The action has no version-id output, so read it out of stdout. Matching a
+      # UUID rather than a label keeps this working if wrangler rewords the line.
+      - name: Extract the version id
+        id: version
+        env:
+          OUT: ${{ steps.upload.outputs.command-output }}
+        run: |
+          set -euo pipefail
+          # `|| true`: grep exits 1 when it matches nothing, and pipefail would
+          # kill the step before the readable error below ever prints.
+          ID=$(printf '%s' "$OUT" | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1 || true)
+          [ -n "$ID" ] || { echo "No version id in wrangler output"; printf '%s\n' "$OUT"; exit 1; }
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      # GREEN GATE: health-check the new version on its OWN preview URL, before
+      # any user can reach it. Cloudflare Access is NOT enabled on preview URLs
+      # for this project, so this hits a public URL. If Access is turned on later,
+      # add these to the curl below or it receives the login page, not /health:
+      #   -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
+      #   -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
+      - name: Health-check the new version
+        env:
+          URL: ${{ steps.upload.outputs.deployment-url }}
+        run: |
+          set -euo pipefail
+          [ -n "$URL" ] || { echo "No preview URL for the uploaded version - is preview_urls true in wrangler.jsonc?"; exit 1; }
+          BODY=$(curl -sS --fail --max-time 30 \
+            "$URL/health")
+          printf '%s\n' "$BODY"
+          printf '%s' "$BODY" | grep -q ok || { echo "New version failed its health check - NOT promoting"; exit 1; }
+
+      # AUTH GATE: the version just built has THIS Supabase URL + key baked in.
+      # Refuse to promote if nobody could sign in (email provider off) - a
+      # dashboard toggle no migration or config file can set. Signup being OPEN
+      # is the design: new accounts land as 'pending' (migration
+      # 20260915140000) and can do nothing until promoted in the dashboard;
+      # the preview canary tests that invariant on every PR.
+      - name: Auth-check production before promoting
+        env:
+          SUPA_URL: ${{ vars.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          SETTINGS=$(curl -sS --fail --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY")
+          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null \
+            || { echo "Email provider is OFF in production - NOT promoting. Fix: Authentication -> Providers -> Email -> enable the PROVIDER."; exit 1; }
+          echo "Production auth verified: sign-in possible."
+
+
+      # PROMOTE: 100%, never a percentage split. On a static-asset Worker a split
+      # serves HTML from one version referencing hashed assets that exist only in
+      # the other, and every second visitor gets 404s.
+      - name: Promote to 100%
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions deploy ${{ steps.version.outputs.id }}@100% --yes
+
+      - name: Record the version id for rollback
+        run: echo "Deployed version ${{ steps.version.outputs.id }} — paste this into the rollback workflow to return here." >> "$GITHUB_STEP_SUMMARY"

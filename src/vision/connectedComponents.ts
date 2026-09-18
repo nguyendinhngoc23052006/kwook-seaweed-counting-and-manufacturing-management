@@ -86,6 +86,26 @@ export function filterByArea(blobs: Blob[], minArea: number, maxArea: number): B
   return blobs.filter((b) => b.area >= minArea && b.area <= maxArea);
 }
 
+// A leaf is a compact region; scattered dark clutter (shadows, belt seams, edge
+// glare) is sparse or stringy. fillRatio = filled pixels / bounding-box area
+// rejects the clutter that survives thresholding. minFill 0 keeps everything.
+export function fillRatio(b: Blob): number {
+  const bw = b.maxX - b.minX + 1;
+  const bh = b.maxY - b.minY + 1;
+  const boxArea = bw * bh;
+  return boxArea === 0 ? 0 : b.area / boxArea;
+}
+
+export function filterBlobs(
+  blobs: Blob[],
+  opts: { minArea: number; maxArea: number; minFill?: number },
+): Blob[] {
+  const minFill = opts.minFill ?? 0;
+  return blobs.filter(
+    (b) => b.area >= opts.minArea && b.area <= opts.maxArea && fillRatio(b) >= minFill,
+  );
+}
+
 export function medianArea(blobs: Blob[]): number {
   if (blobs.length === 0) return 0;
   const areas = blobs.map((b) => b.area).sort((a, b) => a - b);

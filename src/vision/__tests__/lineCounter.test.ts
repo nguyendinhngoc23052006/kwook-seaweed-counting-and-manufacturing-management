@@ -70,3 +70,41 @@ describe("LineCounter", () => {
     expect(stats.counted).toBe(1);
   });
 });
+
+describe("LineCounter.activeTracks", () => {
+  it("exposes live tracks with their counted flag for the overlay", () => {
+    const counter = new LineCounter(config);
+    counter.update([blobAt(20, 10)]);
+    counter.update([blobAt(20, 20)]);
+    const tracks = counter.activeTracks();
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]?.counted).toBe(false);
+    expect(tracks[0]?.cy).toBe(20);
+  });
+
+  it("marks a track counted once it has crossed", () => {
+    const counter = new LineCounter(config);
+    for (const cy of [10, 20, 30, 40, 50]) counter.update([blobAt(20, cy)]);
+    expect(counter.activeTracks()[0]?.counted).toBe(true);
+  });
+});
+
+describe("LineCounter.setLineY", () => {
+  it("moves the line without losing the running tally", () => {
+    const counter = new LineCounter(config);
+    for (const cy of [10, 20, 30, 40, 50]) counter.update([blobAt(20, cy)]);
+    expect(counter.stats().counted).toBe(1);
+
+    counter.setLineY(80);
+    for (const cy of [60, 70, 80, 90]) counter.update([blobAt(20, cy)]);
+    // Same track already counted at the old line; it must not count twice.
+    expect(counter.stats().counted).toBe(1);
+  });
+
+  it("counts a new object against the moved line", () => {
+    const counter = new LineCounter(config);
+    counter.setLineY(80);
+    for (const cy of [50, 60, 70, 80, 90]) counter.update([blobAt(20, cy)]);
+    expect(counter.stats().counted).toBe(1);
+  });
+});

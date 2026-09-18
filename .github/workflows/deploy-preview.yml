@@ -1,0 +1,254 @@
+# Copied from the guide's templates/workflows/. Substitute VITE_,
+# dist and staging. Job names "deploy-preview" and "canary"
+# are required BY NAME by the ruleset (Part 2 step 11) — rename one and you move
+# both.
+name: deploy-preview
+
+on:
+  pull_request:
+    branches: [staging]
+
+concurrency:
+  group: preview-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    # Dependabot PRs get no Actions secrets (only a separate Dependabot-secrets
+    # store) - skip rather than red-fail; a skipped required check reports as success.
+    if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      preview-url: ${{ steps.upload.outputs.deployment-url }}
+      # For the canary: where this preview's database lives and whether it is
+      # this PR's own isolated branch (seeded demo accounts) or shared staging.
+      # The publishable key is NOT passed as an output - it is masked, and
+      # GitHub silently drops job outputs containing masked values.
+      supabase-url: ${{ steps.supabase.outputs.url }}
+      db: ${{ steps.supabase.outputs.db }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - run: npm ci
+
+      # Resolve THIS PR's own Supabase preview branch. Never fall back to
+      # production credentials - a preview writing to prod is the whole risk
+      # this step exists to remove. A branchless PR may fall back to STAGING,
+      # but only when the repo opted in (PREVIEW_DB_FALLBACK=staging).
+      - name: Resolve Supabase preview branch
+        id: supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROD_URL: ${{ vars.VITE_SUPABASE_URL }}
+          HEAD_REF: ${{ github.head_ref }}
+          FALLBACK: ${{ vars.PREVIEW_DB_FALLBACK }}
+          STAGING_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          STAGING_KEY: ${{ vars.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          PROD_REF=$(printf '%s' "$PROD_URL" | sed -E 's#^https://([^.]+)\..*#\1#')
+          [ -n "$PROD_REF" ] || { echo "Could not derive project ref from VITE_SUPABASE_URL"; exit 1; }
+
+          BRANCH_REF=""
+          for _ in $(seq 1 18); do   # 18 * 20s = 6 minutes
+            BODY=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$PROD_REF/branches") || BODY='[]'
+            BRANCH_REF=$(printf '%s' "$BODY" | jq -r --arg b "$HEAD_REF" \
+              '[(if type == "array" then .[] else empty end)
+                | select(.git_branch == $b and .preview_project_status == "ACTIVE_HEALTHY")][0].project_ref // empty' || echo "")
+            [ -n "$BRANCH_REF" ] && break
+            sleep 20
+          done
+
+          # No branch. Fall back to STAGING only if the repo opted in; an unset
+          # PREVIEW_DB_FALLBACK means a missing branch is a misconfiguration and
+          # has to stay loud. Never production, in either path.
+          if [ -z "$BRANCH_REF" ]; then
+            if [ "${FALLBACK:-}" = "staging" ]; then
+              [ -n "$STAGING_URL" ] && [ -n "$STAGING_KEY" ] || {
+                echo "PREVIEW_DB_FALLBACK=staging but STAGING_SUPABASE_URL / STAGING_SUPABASE_PUBLISHABLE_KEY are unset (step 7.5)."
+                exit 1
+              }
+              echo "No preview branch for this PR - using the STAGING database (PREVIEW_DB_FALLBACK=staging). This preview can write to staging."
+              echo "::add-mask::$STAGING_KEY"
+              echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+              echo "key=$STAGING_KEY" >> "$GITHUB_OUTPUT"
+              echo "db=staging (shared - this preview can write to it)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "No Supabase preview branch for this PR - check step 6 ('Supabase changes only' must be OFF), then re-run this job once the Supabase Preview check reports. To point branchless previews at staging instead, set the repo variable PREVIEW_DB_FALLBACK to 'staging' (step 8, Scale rung)."
+            exit 1
+          fi
+
+          KEYS=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$BRANCH_REF/api-keys?reveal=true")
+          pick() {
+            printf '%s' "$KEYS" | jq -r --arg n "$1" \
+              '[(if type == "array" then .[] else empty end)
+                | select(.name == $n)][0].api_key // empty' || echo ""
+          }
+          KEY=$(pick publishable)
+          # Legacy projects predate publishable keys and still expose "anon".
+          [ -n "$KEY" ] || KEY=$(pick anon)
+          [ -n "$KEY" ] || { echo "No publishable or anon key on branch project $BRANCH_REF"; exit 1; }
+
+          echo "::add-mask::$KEY"
+          echo "url=https://$BRANCH_REF.supabase.co" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "db=this PR's own preview branch (isolated)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ steps.supabase.outputs.url }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ steps.supabase.outputs.key }}
+        run: npm run build
+
+      # Never set wrangler-version. Dependabot bumps this `uses:` ref; it does
+      # not read values inside a `with:` block, so a pinned version ages in place.
+      - name: Upload preview version
+        id: upload
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --env staging is REQUIRED. Omitting it uploads to the PRODUCTION Worker.
+          command: versions upload --env staging
+
+      - name: Comment the preview URL
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: preview
+          message: |
+            **Preview:** ${{ steps.upload.outputs.deployment-url }}
+            **Database:** ${{ steps.supabase.outputs.db }}
+
+  canary:
+    needs: deploy-preview
+    runs-on: ubuntu-latest
+    steps:
+      # Cloudflare Access is NOT enabled on preview URLs for this project, so the
+      # health check hits a public URL. If Access is turned on later, add:
+      #   -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" \
+      #   -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" \
+      # to the curl below, or it will receive the login page instead of /health.
+      - name: Health-check the preview
+        env:
+          URL: ${{ needs.deploy-preview.outputs.preview-url }}
+        run: |
+          set -euo pipefail
+          [ -n "$URL" ] || { echo "deploy-preview produced no preview URL"; exit 1; }
+          BODY=$(curl -sS --fail --max-time 30 \
+            "$URL/health")
+          printf '%s\n' "$BODY"
+          printf '%s' "$BODY" | grep -q ok || { echo "health check did not return ok"; exit 1; }
+
+      # /health is a static file; passing it proves Cloudflare served an asset,
+      # not that anyone can use the app. That gap was proven the day the whole
+      # app 403'd on every table with every check green. So the canary also
+      # signs in as the seeded demo admin and performs one authenticated read -
+      # auth config, table grants, RLS and the profile trigger all have to hold
+      # for that to succeed.
+      - name: Auth canary - a real sign-in and a real read
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPA_URL: ${{ needs.deploy-preview.outputs.supabase-url }}
+          DB: ${{ needs.deploy-preview.outputs.db }}
+        run: |
+          set -euo pipefail
+          [ -n "$SUPA_URL" ] || { echo "deploy-preview produced no supabase-url output"; exit 1; }
+
+          # Re-fetch the publishable key (it cannot travel via job outputs, see
+          # above). Same lookup the resolve step uses.
+          REF=$(printf '%s' "$SUPA_URL" | sed -E 's#^https://([^.]+)\..*#\1#')
+          KEYS=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true")
+          pick() {
+            printf '%s' "$KEYS" | jq -r --arg n "$1" \
+              '[(if type == "array" then .[] else empty end)
+                | select(.name == $n)][0].api_key // empty' || echo ""
+          }
+          KEY=$(pick publishable)
+          [ -n "$KEY" ] || KEY=$(pick anon)
+          [ -n "$KEY" ] || { echo "No publishable or anon key on $REF"; exit 1; }
+          echo "::add-mask::$KEY"
+
+          # A fresh preview branch reports its DATABASE healthy before the
+          # Configurations and Seeding tasks have run - the first execution of
+          # this canary read settings 17 seconds after branch creation and saw
+          # signup still open. So wait, bounded, for the config to land instead
+          # of failing on the race.
+          # Signup is OPEN by design: the gate is the 'pending' role, not the
+          # signup switch, and that invariant is tested end-to-end below.
+          SETTINGS=""
+          for _ in $(seq 1 18); do   # 18 * 10s = 3 minutes
+            SETTINGS=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/settings" -H "apikey: $KEY" || echo "")
+            if printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+          printf '%s' "$SETTINGS" | jq -e '.external.email == true' >/dev/null 2>&1 \
+            || { echo "Email provider is OFF - nobody can sign in. Settings:"; printf '%s\n' "$SETTINGS" | jq . 2>/dev/null || printf '%s\n' "$SETTINGS"; exit 1; }
+
+
+          case "$DB" in
+            *isolated*) ;;
+            *)
+              echo "Database is '$DB' - no seeded demo accounts there, stopping after the settings checks."
+              exit 0
+              ;;
+          esac
+
+          # Credentials from supabase/seed.sql. They exist only on ephemeral
+          # preview branches, which is the only place this block runs. Seeding
+          # is a branch task like Configurations, so give it the same bounded
+          # wait before declaring sign-in broken.
+          TOKEN=""
+          for _ in $(seq 1 18); do
+            TOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/token?grant_type=password" \
+              -H "apikey: $KEY" -H "Content-Type: application/json" \
+              -d '{"email":"demo-admin@kwook.test","password":"demo-kwook-2026"}' \
+              | jq -r '.access_token // empty' || echo "")
+            [ -n "$TOKEN" ] && break
+            sleep 10
+          done
+          [ -n "$TOKEN" ] || { echo "Password sign-in STILL failing for the seeded demo admin after 3 minutes - the seed did not run or auth is broken"; exit 1; }
+
+          ROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN")
+          printf '%s' "$ROWS" | jq -e 'type == "array" and length >= 1' >/dev/null \
+            || { echo "Authenticated read of profiles returned no rows - grants, RLS or the profile trigger are broken. Body:"; printf '%s\n' "$ROWS"; exit 1; }
+
+          # The open-signup invariant, tested for real: a fresh signup must get
+          # in, land as role 'pending', and be able to read NOTHING else. This
+          # is what makes open signup safe; if it ever breaks, block the merge.
+          JUNK_EMAIL="canary-$(date +%s)-$RANDOM@canary.test"
+          JUNK_PW=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')
+          PTOKEN=$(curl -sS --max-time 30 "$SUPA_URL/auth/v1/signup" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$JUNK_EMAIL\",\"password\":\"$JUNK_PW\"}" \
+            | jq -r '.access_token // empty')
+          [ -n "$PTOKEN" ] || { echo "Public signup FAILED - new accounts cannot be created"; exit 1; }
+
+          PROLE=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/profiles?select=role" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN" | jq -r '.[0].role // empty')
+          [ "$PROLE" = "pending" ] || { echo "A fresh signup got role '$PROLE' instead of 'pending' - the approval gate is broken"; exit 1; }
+
+          PROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/count_minutes?select=id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN")
+          printf '%s' "$PROWS" | jq -e 'type == "array" and length == 0' >/dev/null \
+            || { echo "A PENDING account can read tenant data - RLS is broken. Body:"; printf '%s\n' "$PROWS"; exit 1; }
+
+          echo "Auth canary passed: admin sign-in works, and a fresh signup lands pending and sees nothing."
+
+
