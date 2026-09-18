@@ -66,6 +66,14 @@ export default function Shell({
               {item.label}
             </NavLink>
           ))}
+          {atLeast(profile.role, "owner") && (
+            // A plain anchor, not NavLink: /org is a separate sibling app/router
+            // (see OrgApp), not a route inside this one -- a client-side NavLink
+            // here would just bounce back to /wall via this router's catch-all.
+            <a href="/org" className="navlink">
+              Hiring &amp; tasks
+            </a>
+          )}
         </nav>
         <span className="appbar__spacer" />
         <span className="muted truncate appbar__who">{profile.display_name}</span>

@@ -41,15 +41,29 @@ export default function App() {
   // gate against the persons/org_nodes model, entirely separate from the
   // profiles-table gate below that the device/wall/admin pages use.
   if (pathname.startsWith("/org")) return <OrgApp />;
-  // Explicit staff entry point -- the public site below has its own "Staff
-  // sign in" link pointing here, so it never fights the root path for it.
-  if (pathname === "/login") return <Login />;
 
   // Everything that isn't one of the internal employee/device routes above
   // is the public careers site, including the bare domain root: a stranger
   // sharing this URL is sharing it for the job board, not an internal login
   // screen. No account, no gate -- same reason /demo and /pair skip it.
-  const STAFF_PATHS = new Set(["/capture", "/wall", "/stations", "/admin", "/claim", "/scan"]);
+  //
+  // /login is a staff path, not public -- but it must NOT hard-render <Login/>
+  // here. Login's own submit handler does window.location.reload() on the SAME
+  // url to pick up the new session; a pathname === "/login" check above the
+  // profile check would fire again on that reload before profile ever loads,
+  // showing the form forever no matter how many times the sign-in succeeded.
+  // Falling through to the ordinary gate below (loading -> !profile -> Login,
+  // else redirected home by the BrowserRouter's catch-all) is what lets the
+  // reload actually notice the new session.
+  const STAFF_PATHS = new Set([
+    "/capture",
+    "/wall",
+    "/stations",
+    "/admin",
+    "/claim",
+    "/scan",
+    "/login",
+  ]);
   const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
   if (!isStaffPath) return <PublicJobsApp />;
 
