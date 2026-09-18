@@ -86,6 +86,10 @@ export async function applyForJob(postingId: string, draft: JobApplicationDraft)
 // cannot make a row appear twice or vanish.
 export const APPLICATIONS_PAGE = 50;
 
+// The three states a posting is done with. org_applications() defaults to
+// everything else (the live pipeline) when no states are passed.
+const CLOSED_APPLICATION_STATES: JobApplicationState[] = ["hired", "not_selected", "withdrawn"];
+
 export async function listApplications(
   postingId: string,
   before?: string,
@@ -97,6 +101,33 @@ export async function listApplications(
   });
   if (error) throw error;
   return Array.isArray(data) ? (data as JobApplication[]) : [];
+}
+
+// Same list, filtered to the terminal states -- the closed-applications
+// disclosure's own page, kept paginated for the same reason the live list is.
+export async function listClosedApplications(
+  postingId: string,
+  before?: string,
+): Promise<JobApplication[]> {
+  const { data, error } = await supabase().rpc("org_applications", {
+    p_posting: postingId,
+    p_before: before ?? null,
+    p_limit: APPLICATIONS_PAGE,
+    p_states: CLOSED_APPLICATION_STATES,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data as JobApplication[]) : [];
+}
+
+// Cheap aggregate for the disclosure's label -- read before the disclosure is
+// ever opened, so "Show 12 closed applications" is correct without fetching
+// a page of them first.
+export async function getClosedApplicationCount(postingId: string): Promise<number> {
+  const { data, error } = await supabase().rpc("org_closed_application_count", {
+    p_posting: postingId,
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
 }
 
 // The two long answers, fetched only when someone opens an applicant.

@@ -18,6 +18,7 @@ import { Section } from "../../components/ui/Section";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
+import { personStatusById, seatOccupantStatusTone } from "../../lib/orgLabels";
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import {
   breadcrumbOf,
@@ -34,6 +35,7 @@ import {
   setNodeActive,
   setNodeNature,
 } from "../../services/nodes";
+import { listVisiblePersons } from "../../services/people";
 import { listRanks } from "../../services/positions";
 
 // Nature and rank names are catalogue rows (node_natures, ranks), not an enum
@@ -119,6 +121,71 @@ function summarizeNodeChange(
     parts.push(t("node_history.moved"));
   }
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+// Same row shape and working links for both the active and the archived
+// children list -- an archived unit must stay fully navigable once its
+// disclosure is opened, this is hiding by default, not disabling.
+function childRow(
+  child: OrgTreeNode,
+  childIndex: Map<string, OrgTreeNode[]>,
+  natures: { key: string; name_vi: string; name_en: string }[],
+  locale: string,
+  t: TFn,
+): JSX.Element {
+  const childNatureName = natureLabelFor(natures, child.nature, locale);
+  return (
+    <ListRow
+      key={child.id}
+      to={`/org/node/${child.id}`}
+      title={nodeLabel(child, locale)}
+      subtitle={t("orgtree.child_counts", {
+        children: childrenOf(childIndex, child.id).length,
+        seats: child.seats.length,
+        staffed: child.seats.filter((seat) => seat.person_id).length,
+      })}
+      meta={
+        <span className="flex flex-wrap items-center gap-1">
+          {childNatureName && <Pill tone="accent">{childNatureName}</Pill>}
+          {!child.active && <Pill tone="danger">{t("orgtree.inactive")}</Pill>}
+        </span>
+      }
+    />
+  );
+}
+
+// Deactivating a unit (the Deactivate button above) only marked it -- nothing
+// ever stopped rendering it, so an archived unit stayed indistinguishable from
+// a live one but for a small pill. This gives it real archive semantics:
+// collapsed by default, same interaction pattern as
+// NodeCapabilityPanel's CapabilityHistoryDisclosure, and still fully
+// navigable once opened.
+function ArchivedChildrenSection(props: {
+  archivedChildren: OrgTreeNode[];
+  childIndex: Map<string, OrgTreeNode[]>;
+  natures: { key: string; name_vi: string; name_en: string }[];
+  locale: string;
+  t: TFn;
+}): JSX.Element {
+  const { archivedChildren, childIndex, natures, locale, t } = props;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="pt-2">
+      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open
+          ? t("orgtree.hide_archived_children")
+          : t("orgtree.show_archived_children", { count: archivedChildren.length })}
+      </Button>
+      {open && (
+        <div className="pt-2">
+          <ListRows>
+            {archivedChildren.map((child) => childRow(child, childIndex, natures, locale, t))}
+          </ListRows>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Collapsed by default and its query only fires once expanded -- same shape as
@@ -222,6 +289,10 @@ export function NodePage(): JSX.Element {
     queryFn: listNodeNatures,
   });
   const ranks = useQuery({ queryKey: ["org", "ranks"], queryFn: listRanks });
+  // Same cache key NodeCapabilityPanel already reads persons under -- one
+  // fetch serves both. Status is the one column org_tree()'s holder join
+  // never checks, so a departed/suspended occupant needs it looked up here.
+  const persons = useQuery({ queryKey: ["org", "persons"], queryFn: listVisiblePersons });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["org", "tree"] });
@@ -321,7 +392,10 @@ export function NodePage(): JSX.Element {
   const trail = breadcrumbOf(nodes, node.id);
   const childIndex = indexChildren(nodes);
   const children = childrenOf(childIndex, node.id);
+  const activeChildren = children.filter((child) => child.active !== false);
+  const archivedChildren = children.filter((child) => child.active === false);
   const seats = seatsByRank(node);
+  const personStatuses = personStatusById(persons.data ?? []);
   const staffed = seats.filter((seat) => seat.person_id).length;
 
   // What the viewer may actually do here. A control nobody may use is not
@@ -546,7 +620,7 @@ export function NodePage(): JSX.Element {
           </form>
         )}
 
-        {children.length === 0 ? (
+        {activeChildren.length === 0 ? (
           <Empty
             title={t("orgtree.no_children")}
             description={
@@ -555,28 +629,19 @@ export function NodePage(): JSX.Element {
           />
         ) : (
           <ListRows>
-            {children.map((child) => {
-              const childNatureName = natureLabelFor(natures.data ?? [], child.nature, locale);
-              return (
-                <ListRow
-                  key={child.id}
-                  to={`/org/node/${child.id}`}
-                  title={nodeLabel(child, locale)}
-                  subtitle={t("orgtree.child_counts", {
-                    children: childrenOf(childIndex, child.id).length,
-                    seats: child.seats.length,
-                    staffed: child.seats.filter((seat) => seat.person_id).length,
-                  })}
-                  meta={
-                    <span className="flex flex-wrap items-center gap-1">
-                      {childNatureName && <Pill tone="accent">{childNatureName}</Pill>}
-                      {!child.active && <Pill tone="danger">{t("orgtree.inactive")}</Pill>}
-                    </span>
-                  }
-                />
-              );
-            })}
+            {activeChildren.map((child) =>
+              childRow(child, childIndex, natures.data ?? [], locale, t),
+            )}
           </ListRows>
+        )}
+        {archivedChildren.length > 0 && (
+          <ArchivedChildrenSection
+            archivedChildren={archivedChildren}
+            childIndex={childIndex}
+            natures={natures.data ?? []}
+            locale={locale}
+            t={t}
+          />
         )}
       </Section>
 
@@ -617,37 +682,48 @@ export function NodePage(): JSX.Element {
           />
         ) : (
           <ListRows>
-            {seats.map((seat) => (
-              <ListRow
-                key={seat.position_id}
-                to={seat.person_id ? `/org/node/${node.id}/person/${seat.person_id}` : undefined}
-                title={seat.title}
-                subtitle={
-                  seat.person_id
-                    ? t("orgtree.seat_held", {
-                        name: seat.person_name ?? "",
-                        code: seat.employee_code ?? "",
-                      })
-                    : t("orgtree.seat_vacant")
-                }
-                meta={
-                  <Pill tone={seat.person_id ? "neutral" : "warning"}>
-                    {rankLabelForKey(ranks.data ?? [], seat.rank_key, locale)}
-                  </Pill>
-                }
-                trailing={
-                  canAppoint ? (
-                    <Button
-                      size="sm"
-                      variant={seat.person_id ? "secondary" : "primary"}
-                      onClick={() => setAssignSeat(seat)}
-                    >
-                      {seat.person_id ? t("orgtree.manage_seat") : t("orgtree.assign")}
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {seats.map((seat) => {
+              const occupantStatus = seat.person_id
+                ? personStatuses.get(seat.person_id)
+                : undefined;
+              const occupantTone = seatOccupantStatusTone(occupantStatus);
+              return (
+                <ListRow
+                  key={seat.position_id}
+                  to={seat.person_id ? `/org/node/${node.id}/person/${seat.person_id}` : undefined}
+                  title={seat.title}
+                  subtitle={
+                    seat.person_id
+                      ? t("orgtree.seat_held", {
+                          name: seat.person_name ?? "",
+                          code: seat.employee_code ?? "",
+                        })
+                      : t("orgtree.seat_vacant")
+                  }
+                  meta={
+                    <span className="flex flex-wrap items-center gap-1">
+                      <Pill tone={seat.person_id ? "neutral" : "warning"}>
+                        {rankLabelForKey(ranks.data ?? [], seat.rank_key, locale)}
+                      </Pill>
+                      {occupantTone && (
+                        <Pill tone={occupantTone}>{t(`person_status.${occupantStatus}`)}</Pill>
+                      )}
+                    </span>
+                  }
+                  trailing={
+                    canAppoint ? (
+                      <Button
+                        size="sm"
+                        variant={seat.person_id ? "secondary" : "primary"}
+                        onClick={() => setAssignSeat(seat)}
+                      >
+                        {seat.person_id ? t("orgtree.manage_seat") : t("orgtree.assign")}
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </ListRows>
         )}
       </Section>

@@ -24,6 +24,79 @@ function health(lastSeen: string | null): {
   return { label: "live", tone: "success" };
 }
 
+function DeviceRow({
+  d,
+  canManage,
+  onRevoke,
+  revoking,
+  t,
+}: {
+  d: CameraDevice;
+  canManage: boolean;
+  onRevoke: (id: string) => void;
+  revoking: boolean;
+  t: ReturnType<typeof useT>;
+}): JSX.Element {
+  const h = health(d.last_seen_at);
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-raised p-3">
+      <div>
+        <div className="font-medium text-ink">{d.name}</div>
+        <div className="text-xs text-ink-faint">{t(`device.role_${d.role}`)}</div>
+      </div>
+      <div className="flex items-center gap-2">
+        {d.revoked_at ? (
+          <Pill tone="danger">{t("device.admin_revoked")}</Pill>
+        ) : (
+          <Pill tone={h.tone}>{t(`device.health_${h.label}`)}</Pill>
+        )}
+        {canManage && !d.revoked_at && (
+          <Button size="sm" variant="danger" disabled={revoking} onClick={() => onRevoke(d.id)}>
+            {t("device.admin_revoke")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Revoked devices are done, not active inventory -- same collapsed-by-default
+// shape as CapabilityHistoryDisclosure (NodeCapabilityPanel.tsx): the count
+// lives in the label, and there is nothing async to fetch since the page
+// already holds every row for this node.
+function RevokedDevicesDisclosure({
+  devices,
+  t,
+}: {
+  devices: CameraDevice[];
+  t: ReturnType<typeof useT>;
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  if (devices.length === 0) return null;
+
+  return (
+    <div className="border-t border-hairline pt-4">
+      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? t("device.hide_revoked") : t("device.show_revoked", { count: devices.length })}
+      </Button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {devices.map((d) => (
+            <DeviceRow
+              key={d.id}
+              d={d}
+              canManage={false}
+              onRevoke={() => {}}
+              revoking={false}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Node-scoped, like camera_devices.sql's own RLS: this node's own devices,
 // gated by manage_camera_devices (create/revoke) or view_camera_data (read
 // only, which also covers export) reaching this node.
@@ -73,6 +146,8 @@ export function CamerasPage(): JSX.Element {
   }
 
   const rows: CameraDevice[] = devices.data ?? [];
+  const liveRows = rows.filter((d) => !d.revoked_at);
+  const revokedRows = rows.filter((d) => d.revoked_at);
 
   return (
     <div className="space-y-6">
@@ -88,39 +163,25 @@ export function CamerasPage(): JSX.Element {
       ) : rows.length === 0 ? (
         <Empty title={t("device.admin_no_devices")} />
       ) : (
-        <div className="space-y-2">
-          {rows.map((d) => {
-            const h = health(d.last_seen_at);
-            return (
-              <div
-                key={d.id}
-                className="flex items-center justify-between rounded-lg border border-hairline bg-surface-raised p-3"
-              >
-                <div>
-                  <div className="font-medium text-ink">{d.name}</div>
-                  <div className="text-xs text-ink-faint">{t(`device.role_${d.role}`)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {d.revoked_at ? (
-                    <Pill tone="danger">{t("device.admin_revoked")}</Pill>
-                  ) : (
-                    <Pill tone={h.tone}>{t(`device.health_${h.label}`)}</Pill>
-                  )}
-                  {canManage && !d.revoked_at && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={revoke.isPending}
-                      onClick={() => revoke.mutate(d.id)}
-                    >
-                      {t("device.admin_revoke")}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          {liveRows.length === 0 ? (
+            <Empty title={t("device.admin_no_live_devices")} />
+          ) : (
+            <div className="space-y-2">
+              {liveRows.map((d) => (
+                <DeviceRow
+                  key={d.id}
+                  d={d}
+                  canManage={canManage}
+                  onRevoke={(id) => revoke.mutate(id)}
+                  revoking={revoke.isPending}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+          <RevokedDevicesDisclosure devices={revokedRows} t={t} />
+        </>
       )}
 
       {revoke.isError && (

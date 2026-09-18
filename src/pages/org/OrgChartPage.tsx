@@ -10,13 +10,19 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
+import { Checkbox } from "../../components/ui/Checkbox";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/Input";
 import { Pill } from "../../components/ui/Pill";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
-import { natureLabelFor, nodeLabel } from "../../lib/orgLabels";
+import {
+  natureLabelFor,
+  nodeLabel,
+  personStatusById,
+  seatOccupantStatusTone,
+} from "../../lib/orgLabels";
 import {
   ancestorsToExpand,
   buildSearchIndex,
@@ -28,6 +34,7 @@ import {
   type NodeNature,
   type OrgTreeNode,
 } from "../../services/nodes";
+import { listVisiblePersons, type Person } from "../../services/people";
 
 // Same depth cap the SQL walks and breadcrumbOf() use: the triggers refuse a
 // cycle unconditionally, so this is pure insurance against a hypothetical
@@ -107,12 +114,14 @@ function NodeBox({
   locale,
   t,
   matched,
+  personStatuses,
 }: {
   node: OrgTreeNode;
   natures: NodeNature[];
   locale: string;
   t: (key: string, vars?: Record<string, string | number>) => string;
   matched: boolean;
+  personStatuses: Map<string, Person["status"]>;
 }) {
   const nature = natureLabelFor(natures, node.nature, locale);
   const shown = seatLines(node);
@@ -139,14 +148,26 @@ function NodeBox({
       </div>
       {shown.length > 0 && (
         <ul className="mt-2 space-y-0.5">
-          {shown.map((seat) => (
-            <li key={seat.position_id} className="text-xs leading-snug">
-              <span className="text-ink-muted">{seat.title}</span>{" "}
-              <span className={seat.person_name ? "font-medium text-ink" : "text-ink-faint"}>
-                {seat.person_name ?? t("orgtree.seat_vacant")}
-              </span>
-            </li>
-          ))}
+          {shown.map((seat) => {
+            const occupantStatus = seat.person_id ? personStatuses.get(seat.person_id) : undefined;
+            const occupantTone = seatOccupantStatusTone(occupantStatus);
+            const nameClass = occupantTone
+              ? occupantTone === "danger"
+                ? "font-medium text-danger-text"
+                : "font-medium text-warning-text"
+              : seat.person_name
+                ? "font-medium text-ink"
+                : "text-ink-faint";
+            return (
+              <li key={seat.position_id} className="text-xs leading-snug">
+                <span className="text-ink-muted">{seat.title}</span>{" "}
+                <span className={nameClass}>{seat.person_name ?? t("orgtree.seat_vacant")}</span>
+                {occupantTone && (
+                  <span className="text-ink-faint"> ({t(`person_status.${occupantStatus}`)})</span>
+                )}
+              </li>
+            );
+          })}
           {node.seats.length > shown.length && (
             <li className="text-xs text-ink-faint">
               {t("orgchart.more_seats", {
@@ -171,6 +192,7 @@ function Branch({
   onToggle,
   matchedIds,
   searching,
+  personStatuses,
 }: {
   node: OrgTreeNode;
   index: Map<string, OrgTreeNode[]>;
@@ -182,6 +204,7 @@ function Branch({
   onToggle: (id: string) => void;
   matchedIds: Set<string>;
   searching: boolean;
+  personStatuses: Map<string, Person["status"]>;
 }): JSX.Element {
   const children = depth < MAX_DEPTH ? childrenOf(index, node.id) : [];
   // While searching, the search's own expand set is authoritative -- it is
@@ -198,6 +221,7 @@ function Branch({
         locale={locale}
         t={t}
         matched={matchedIds.has(node.id)}
+        personStatuses={personStatuses}
       />
       {children.length > 0 && !searching && (
         <button
@@ -224,6 +248,7 @@ function Branch({
               onToggle={onToggle}
               matchedIds={matchedIds}
               searching={searching}
+              personStatuses={personStatuses}
             />
           ))}
         </ul>
@@ -246,12 +271,37 @@ function countBelow(index: Map<string, OrgTreeNode[]>, id: string): number {
   return n;
 }
 
+// With the archived toggle off, an inactive node's whole subtree is
+// presumptively archived context, not orphaned live units -- so this filters
+// the flat snapshot itself (transitively, at any depth) rather than the box
+// being drawn, and everything downstream (the index, the search index, the
+// roots) reads the filtered array and never sees a hidden branch to begin
+// with.
+export function activeSubtreeOnly(nodes: OrgTreeNode[]): OrgTreeNode[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const visible = new Map<string, boolean>();
+  function isVisible(id: string): boolean {
+    const cached = visible.get(id);
+    if (cached !== undefined) return cached;
+    const node = byId.get(id);
+    if (!node) return false;
+    // Cycles are refused by org_guard_nodes server-side; this guard just keeps
+    // a hypothetical one from looping here instead of crashing there.
+    visible.set(id, false);
+    const result = node.active && (node.parent_id === null || isVisible(node.parent_id));
+    visible.set(id, result);
+    return result;
+  }
+  return nodes.filter((n) => isVisible(n.id));
+}
+
 // The whole organisation as one picture, drawn from the same org_tree()
 // snapshot the node browser reads. Every box is a link into that box, so the
 // chart is a way to work with the tree rather than a poster of it.
 export function OrgChartPage(): JSX.Element {
   const { t, locale } = useI18n();
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
+  const [showArchived, setShowArchived] = useState(false);
   const toggle = (id: string) =>
     setOpened((prev) => {
       const next = new Set(prev);
@@ -425,6 +475,11 @@ export function OrgChartPage(): JSX.Element {
     queryKey: ["org", "node-natures"],
     queryFn: listNodeNatures,
   });
+  // Same cache key NodeCapabilityPanel/NodePage already read persons under.
+  // org_tree()'s holder join never checks status, so a departed or suspended
+  // occupant is looked up here rather than trusted at face value.
+  const persons = useQuery({ queryKey: ["org", "persons"], queryFn: listVisiblePersons });
+  const personStatuses = useMemo(() => personStatusById(persons.data ?? []), [persons.data]);
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -434,14 +489,24 @@ export function OrgChartPage(): JSX.Element {
   }, [query]);
 
   const nodes = tree.data ?? [];
-  // Rebuilt only when the snapshot changes, not per keystroke -- matching
-  // itself is then a plain substring scan over already-folded text.
-  const searchIndex = useMemo(() => buildSearchIndex(nodes), [nodes]);
+  // Filtered once, here, before anything downstream (the search index, the
+  // children index, the roots list) ever sees the snapshot -- a hidden branch
+  // is absent from every one of them rather than threaded through as a prop.
+  const visibleNodes = useMemo(
+    () => (showArchived ? nodes : activeSubtreeOnly(nodes)),
+    [nodes, showArchived],
+  );
+  // Rebuilt only when the visible snapshot changes, not per keystroke --
+  // matching itself is then a plain substring scan over already-folded text.
+  const searchIndex = useMemo(() => buildSearchIndex(visibleNodes), [visibleNodes]);
   const matchedIds = useMemo(
     () => matchingNodeIds(searchIndex, debouncedQuery),
     [searchIndex, debouncedQuery],
   );
-  const searchExpand = useMemo(() => ancestorsToExpand(nodes, matchedIds), [nodes, matchedIds]);
+  const searchExpand = useMemo(
+    () => ancestorsToExpand(visibleNodes, matchedIds),
+    [visibleNodes, matchedIds],
+  );
   const searching = debouncedQuery.trim().length > 0;
 
   if (tree.isLoading) return <ListSkeleton rows={4} label={t("orgtree.loading")} />;
@@ -449,8 +514,8 @@ export function OrgChartPage(): JSX.Element {
     return <ErrorState message={errorMessage(tree.error, t("orgtree.load_failed"))} />;
   }
 
-  const index = indexChildren(nodes);
-  const roots = nodes.filter((n) => n.parent_id === null);
+  const index = indexChildren(visibleNodes);
+  const roots = visibleNodes.filter((n) => n.parent_id === null);
   if (roots.length === 0) {
     return <Empty title={t("orgtree.empty")} description={t("orgtree.empty_hint")} />;
   }
@@ -464,19 +529,26 @@ export function OrgChartPage(): JSX.Element {
         <p className="text-sm text-ink-muted">{t("orgchart.hint")}</p>
       </div>
 
-      <div className="max-w-sm">
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("orgchart.search_placeholder")}
-          aria-label={t("orgchart.search_placeholder")}
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="max-w-sm flex-1">
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("orgchart.search_placeholder")}
+            aria-label={t("orgchart.search_placeholder")}
+          />
+          {searching && !noResults && (
+            <p className="mt-1 text-xs text-ink-muted">
+              {t("orgchart.search_count", { count: matchedIds.size })}
+            </p>
+          )}
+        </div>
+        <Checkbox
+          checked={showArchived}
+          onChange={setShowArchived}
+          label={t("orgchart.show_archived")}
         />
-        {searching && !noResults && (
-          <p className="mt-1 text-xs text-ink-muted">
-            {t("orgchart.search_count", { count: matchedIds.size })}
-          </p>
-        )}
       </div>
 
       {noResults ? (
@@ -508,6 +580,7 @@ export function OrgChartPage(): JSX.Element {
                   onToggle={toggle}
                   matchedIds={matchedIds}
                   searching={searching}
+                  personStatuses={personStatuses}
                 />
               ))}
             </ul>
