@@ -15,7 +15,7 @@ import type { CameraCapabilityKey } from "../../types/camera";
 
 // "Ho so cua toi" -- the signed-in person's own seats, rank and capabilities,
 // plus the two contact fields (display name, phone) they may correct
-// themselves. Mau Heritage's equivalent page edited a flat `profiles` row
+// themselves. Kwook Management Hub's equivalent page edited a flat `profiles` row
 // (display_name, phone, locale) under a set_role() hierarchy; Kwook has
 // neither a profiles table nor set_role(), so this reads the person's own
 // seats and the same camera-capability reach query CamerasPage/NodePage/

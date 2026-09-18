@@ -6,7 +6,8 @@ import type { Position, Rank } from "./positions";
 // Named to match the source repo's export names (getMyProfile, updateMyProfile)
 // so sibling ported files that import by name still resolve.
 //
-// Mau Heritage's ProfilePage/profiles.ts read and wrote a flat `profiles` row
+// Kwook Management Hub's ProfilePage/profiles.ts (source repo, since renamed from
+// Mau Heritage) read and wrote a flat `profiles` row
 // (display_name, phone, locale) under a five-tier set_role() hierarchy. Kwook
 // has neither: no `profiles` table, no set_role(), no tiers -- a person's
 // authority here is the seat they hold (services/positions.ts) plus whatever
@@ -119,7 +120,7 @@ async function loadMyPositions(positionIds: string[]): Promise<MyPosition[]> {
     .filter((entry): entry is MyPosition => entry !== null);
 }
 
-// Contact fields only -- the same two Mau Heritage's ProfilePage let a person
+// Contact fields only -- the same two Kwook Management Hub's ProfilePage let a person
 // edit about themselves (display_name, phone). full_name, employee_code and
 // status stay manager/admin-controlled through services/people.ts; locale has
 // no server column here (see ProfilePage.tsx) so it never appears in a patch.
