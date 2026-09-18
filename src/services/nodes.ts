@@ -17,7 +17,8 @@ export type CapabilityKey =
   | "maintain_bank_details"
   | "manage_camera_devices"
   | "view_camera_data"
-  | "view_attendance_below";
+  | "view_attendance_below"
+  | "enroll_own_face";
 // export_camera_data is not in this union: PR #40 retired that capability
 // key entirely (view implies export now).
 

@@ -37,6 +37,11 @@ describe("parseAttendanceConfig", () => {
     expect(cfg.facing).toBe("environment");
   });
 
+  it("clamps match_threshold to the server's 0.8 ceiling", () => {
+    const cfg = parseAttendanceConfig({ match_threshold: 9 });
+    expect(cfg.matchThreshold).toBe(0.8);
+  });
+
   it("never lets the zone run past the frame edge", () => {
     const cfg = parseAttendanceConfig({ zone: { x: 0.9, y: 0.9, w: 0.5, h: 0.5 } });
     expect(cfg.zone.x + cfg.zone.w).toBeLessThanOrEqual(1);

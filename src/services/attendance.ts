@@ -133,6 +133,7 @@ export interface AttendanceRow {
   check_outs: number;
   unpaired_ins: number;
   unpaired_outs: number;
+  on_site: boolean;
 }
 
 export async function fetchAttendanceReport(
@@ -175,6 +176,7 @@ const CSV_HEADER = [
   "check_outs",
   "unpaired_ins",
   "unpaired_outs",
+  "on_site",
 ];
 
 function csvField(value: string | number): string {
@@ -201,6 +203,7 @@ export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
         row.check_outs,
         row.unpaired_ins,
         row.unpaired_outs,
+        row.on_site ? "true" : "false",
       ]
         .map(csvField)
         .join(","),

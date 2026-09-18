@@ -25,8 +25,8 @@ function NumberField({
   id: string;
   label: string;
   hint?: string;
-  value: number;
-  onChange: (value: number) => void;
+  value: string;
+  onChange: (value: string) => void;
   step: number;
   min: number;
   max: number;
@@ -42,7 +42,7 @@ function NumberField({
         min={min}
         max={max}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
       />
       {hint && <div className="mt-1 text-xs text-ink-faint">{hint}</div>}
@@ -63,41 +63,41 @@ export function AttendanceConfigDialog({
 }): JSX.Element {
   const t = useT();
   const [facing, setFacing] = useState<"user" | "environment">("user");
-  const [zoneX, setZoneX] = useState(0);
-  const [zoneY, setZoneY] = useState(0);
-  const [zoneW, setZoneW] = useState(0);
-  const [zoneH, setZoneH] = useState(0);
-  const [minFaceRatio, setMinFaceRatio] = useState(0);
-  const [stableFrames, setStableFrames] = useState(0);
-  const [matchThreshold, setMatchThreshold] = useState(0);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [flashMs, setFlashMs] = useState(0);
+  const [zoneX, setZoneX] = useState("");
+  const [zoneY, setZoneY] = useState("");
+  const [zoneW, setZoneW] = useState("");
+  const [zoneH, setZoneH] = useState("");
+  const [minFaceRatio, setMinFaceRatio] = useState("");
+  const [stableFrames, setStableFrames] = useState("");
+  const [matchThreshold, setMatchThreshold] = useState("");
+  const [cooldownSeconds, setCooldownSeconds] = useState("");
+  const [flashMs, setFlashMs] = useState("");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: device.attendance_config only seeds local state on open, not tracked live.
   useEffect(() => {
     if (!open) return;
     const config = parseAttendanceConfig(device.attendance_config);
     setFacing(config.facing);
-    setZoneX(config.zone.x);
-    setZoneY(config.zone.y);
-    setZoneW(config.zone.w);
-    setZoneH(config.zone.h);
-    setMinFaceRatio(config.minFaceRatio);
-    setStableFrames(config.stableFrames);
-    setMatchThreshold(config.matchThreshold);
-    setCooldownSeconds(config.cooldownSeconds);
-    setFlashMs(config.flashMs);
+    setZoneX(String(config.zone.x));
+    setZoneY(String(config.zone.y));
+    setZoneW(String(config.zone.w));
+    setZoneH(String(config.zone.h));
+    setMinFaceRatio(String(config.minFaceRatio));
+    setStableFrames(String(config.stableFrames));
+    setMatchThreshold(String(config.matchThreshold));
+    setCooldownSeconds(String(config.cooldownSeconds));
+    setFlashMs(String(config.flashMs));
   }, [open, device.id]);
 
   const save = useMutation({
     mutationFn: () =>
       setAttendanceConfig(device.id, {
-        zone: { x: zoneX, y: zoneY, w: zoneW, h: zoneH },
-        min_face_ratio: minFaceRatio,
-        stable_frames: stableFrames,
-        match_threshold: matchThreshold,
-        cooldown_seconds: cooldownSeconds,
-        flash_ms: flashMs,
+        zone: { x: Number(zoneX), y: Number(zoneY), w: Number(zoneW), h: Number(zoneH) },
+        min_face_ratio: Number(minFaceRatio),
+        stable_frames: Number(stableFrames),
+        match_threshold: Number(matchThreshold),
+        cooldown_seconds: Number(cooldownSeconds),
+        flash_ms: Number(flashMs),
         facing,
       }),
     onSuccess: () => {
@@ -139,7 +139,8 @@ export function AttendanceConfigDialog({
 
         <div>
           <Label>{t("attendance_config.zone")}</Label>
-          <div className="grid grid-cols-4 gap-2">
+          {/* Un-layered `.grid` in styles.css beats Tailwind's grid-cols-4; force columns inline instead. */}
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
             <NumberField
               id="attendance-zone-x"
               label={t("attendance_config.zone_x")}
@@ -214,7 +215,7 @@ export function AttendanceConfigDialog({
           onChange={setMatchThreshold}
           step={0.05}
           min={0.1}
-          max={1.5}
+          max={0.8}
           disabled={save.isPending}
         />
 

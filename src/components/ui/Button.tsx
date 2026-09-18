@@ -9,8 +9,9 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const styles: Record<Variant, string> = {
+  // `!` forces these to beat styles.css's un-layered `button { background: var(--accent) }`, which otherwise wins over the plain disabled: utilities and leaves a disabled primary button looking enabled.
   primary:
-    "bg-accent text-accent-on hover:bg-accent-strong disabled:bg-ink-faint disabled:text-surface",
+    "bg-accent text-accent-on hover:bg-accent-strong disabled:bg-ink-faint! disabled:text-surface!",
   secondary:
     "bg-surface-raised text-ink border border-hairline hover:bg-surface-muted disabled:opacity-50",
   danger: "bg-danger-fill text-white hover:brightness-95 disabled:opacity-50",

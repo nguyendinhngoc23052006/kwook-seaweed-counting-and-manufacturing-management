@@ -81,6 +81,10 @@ export function ProfilePage(): JSX.Element {
 
   const data = profile.data;
   const person = data?.person ?? null;
+  // enroll_own_face is a privilege, not a default: a coworker with camera
+  // access must not be able to enrol someone else's face as their own.
+  const canSelfEnroll =
+    reach.data?.isAdmin === true || (reach.data?.byKey.enroll_own_face?.length ?? 0) > 0;
 
   function handleSave() {
     setSaved(false);
@@ -163,7 +167,7 @@ export function ProfilePage(): JSX.Element {
         )}
       </Section>
 
-      {person && <FaceEnrollmentPanel personId={person.id} canEnroll />}
+      {person && <FaceEnrollmentPanel personId={person.id} canEnroll={canSelfEnroll} />}
 
       {person && (
         <Section title={t("profile.contact_title")} description={t("profile.contact_hint")}>

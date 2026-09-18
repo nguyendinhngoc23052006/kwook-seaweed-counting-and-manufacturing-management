@@ -76,7 +76,9 @@ export function parseAttendanceConfig(raw: unknown): AttendanceConfig {
     },
     minFaceRatio: num(source.min_face_ratio, d.minFaceRatio, 0.05, 1),
     stableFrames: Math.round(num(source.stable_frames, d.stableFrames, 1, 30)),
-    matchThreshold: num(source.match_threshold, d.matchThreshold, 0.1, 1.5),
+    // Server rejects above 0.8 -- face-api inter-person distances run 0.6-0.9,
+    // so 1.5 meant "everyone matches somebody".
+    matchThreshold: num(source.match_threshold, d.matchThreshold, 0.1, 0.8),
     cooldownSeconds: Math.round(num(source.cooldown_seconds, d.cooldownSeconds, 0, 86400)),
     flashMs: Math.round(num(source.flash_ms, d.flashMs, 0, 3000)),
     facing: source.facing === "environment" ? "environment" : "user",

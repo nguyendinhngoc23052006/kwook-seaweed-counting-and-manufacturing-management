@@ -93,15 +93,20 @@ export function FaceEnrollmentPanel({
       const canvas = drawScaledDown(img);
       const engine = await import("../../attendance/faceEngine");
       await engine.loadFaceModels();
-      const embedding = await engine.describeLargestFace(canvas);
-      if (!embedding) throw new NoFaceFoundError();
+      const faces = await engine.describeFaces(canvas);
+      const largest = faces.reduce<(typeof faces)[number] | null>((best, face) => {
+        const area = face.box.width * face.box.height;
+        const bestArea = best ? best.box.width * best.box.height : -1;
+        return area > bestArea ? face : best;
+      }, null);
+      if (!largest) throw new NoFaceFoundError();
 
       setPhase("uploading");
       const blob = await canvasToJpeg(canvas);
       const path = await uploadPersonPhoto(personId, blob);
       await enrollFace({
         personId,
-        embedding,
+        embedding: largest.descriptor,
         modelVersion: FACE_MODEL_VERSION,
         photoPath: path,
       });
@@ -133,29 +138,28 @@ export function FaceEnrollmentPanel({
   return (
     <Section title={t("face.title")} description={t("face.hint")}>
       <div className="space-y-3 py-2">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {photo.data && (
             <img src={photo.data} alt="" className="h-24 w-24 rounded-full object-cover" />
           )}
           {enrollment.data ? (
-            <>
-              <Pill tone="success">
-                {t("face.enrolled", {
-                  date: new Date(enrollment.data.enrolled_at).toLocaleDateString(
-                    locale === "vi" ? "vi-VN" : "en-US",
-                  ),
-                })}
-              </Pill>
-              {/* The doors only compare embeddings made by the model they run;
-                  an enrolment from an older one silently never matches. */}
-              {enrollment.data.model_version !== FACE_MODEL_VERSION && (
-                <Pill tone="warning">{t("face.stale_model")}</Pill>
-              )}
-            </>
+            <Pill tone="success">
+              {t("face.enrolled", {
+                date: new Date(enrollment.data.enrolled_at).toLocaleDateString(
+                  locale === "vi" ? "vi-VN" : "en-US",
+                ),
+              })}
+            </Pill>
           ) : (
             <Pill tone="warning">{t("face.not_enrolled")}</Pill>
           )}
         </div>
+
+        {/* The doors only compare embeddings made by the model they run; an
+            enrolment from an older one silently never matches. */}
+        {enrollment.data && enrollment.data.model_version !== FACE_MODEL_VERSION && (
+          <Alert variant="warning">{t("face.stale_model")}</Alert>
+        )}
 
         {error && <Alert variant="error">{error}</Alert>}
         {saved && !enroll.isPending && <Alert variant="success">{t("face.enrolled_ok")}</Alert>}

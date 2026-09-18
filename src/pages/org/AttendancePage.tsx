@@ -9,7 +9,7 @@ import { Input, Label } from "../../components/ui/Input";
 import { Pill } from "../../components/ui/Pill";
 import { Section } from "../../components/ui/Section";
 import { ListSkeleton } from "../../components/ui/Skeleton";
-import { endOfDayIso, startOfDayIso } from "../../lib/dates";
+import { vietnamDayStartIso } from "../../lib/dates";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
 import {
@@ -85,18 +85,24 @@ function AttendanceTable({
 }): JSX.Element {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[44rem] text-sm">
         <thead>
           <tr className="border-b border-hairline text-left text-ink-muted">
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_name")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_code")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_day")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_first_in")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_last_out")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_hours")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_ins")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_outs")}</th>
-            <th className="py-2 pr-3 font-medium">{t("attendance.col_missing")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_name")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_code")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+              {t("attendance.col_missing")}
+            </th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_day")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+              {t("attendance.col_first_in")}
+            </th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+              {t("attendance.col_last_out")}
+            </th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_hours")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_ins")}</th>
+            <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_outs")}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline bg-surface-raised text-ink">
@@ -104,21 +110,31 @@ function AttendanceTable({
             const missing = row.unpaired_ins + row.unpaired_outs;
             return (
               <tr key={`${row.person_id}-${row.day}`}>
-                <td className="py-2 pr-3">{row.full_name}</td>
-                <td className="py-2 pr-3">{row.employee_code}</td>
-                <td className="py-2 pr-3">{row.day}</td>
-                <td className="py-2 pr-3">{formatTimeVietnam(row.first_in)}</td>
-                <td className="py-2 pr-3">{formatTimeVietnam(row.last_out)}</td>
-                <td className="py-2 pr-3">{formatHm(row.seconds_on_site)}</td>
-                <td className="py-2 pr-3">{row.check_ins}</td>
-                <td className="py-2 pr-3">{row.check_outs}</td>
-                <td className="py-2 pr-3">
+                <td className="whitespace-nowrap py-2 pr-3">{row.full_name}</td>
+                <td className="whitespace-nowrap py-2 pr-3">{row.employee_code}</td>
+                <td className="whitespace-nowrap py-2 pr-3">
                   {missing > 0 ? (
                     <Pill tone="warning">{missing}</Pill>
                   ) : (
                     <span className="text-ink-muted">0</span>
                   )}
                 </td>
+                <td className="whitespace-nowrap py-2 pr-3">
+                  {new Date(`${row.day}T00:00:00+07:00`).toLocaleDateString("vi-VN", {
+                    timeZone: "Asia/Ho_Chi_Minh",
+                  })}
+                </td>
+                <td className="whitespace-nowrap py-2 pr-3">{formatTimeVietnam(row.first_in)}</td>
+                <td className="whitespace-nowrap py-2 pr-3">
+                  {row.on_site ? (
+                    <Pill tone="success">{t("attendance.on_site")}</Pill>
+                  ) : (
+                    formatTimeVietnam(row.last_out)
+                  )}
+                </td>
+                <td className="whitespace-nowrap py-2 pr-3">{formatHm(row.seconds_on_site)}</td>
+                <td className="whitespace-nowrap py-2 pr-3">{row.check_ins}</td>
+                <td className="whitespace-nowrap py-2 pr-3">{row.check_outs}</td>
               </tr>
             );
           })}
@@ -148,15 +164,11 @@ export function AttendancePage(): JSX.Element {
   const treeNodes: OrgTreeNode[] = tree.data ?? [];
 
   const rangeInvalid = until < since;
-  const tooLong = daysBetween(since, until) > MAX_SPAN_DAYS;
-  const guardBlocked = rangeInvalid || tooLong;
+  const tooLong = daysBetween(since, until) + 1 > MAX_SPAN_DAYS;
+  const guardBlocked = !since || !until || rangeInvalid || tooLong;
 
-  // The RPC is exclusive on p_until, so a report "through" the until day
-  // needs one millisecond past that day's local end to include it.
-  const sinceIso = submitted ? startOfDayIso(submitted.since) : null;
-  const untilIso = submitted
-    ? new Date(new Date(endOfDayIso(submitted.until)).getTime() + 1).toISOString()
-    : null;
+  const sinceIso = submitted ? vietnamDayStartIso(submitted.since) : null;
+  const untilIso = submitted ? vietnamDayStartIso(submitted.until, 1) : null;
 
   const report = useQuery({
     queryKey: ["org", "attendance", nodeId, sinceIso, untilIso],
@@ -207,6 +219,9 @@ export function AttendancePage(): JSX.Element {
                     : `${n.name} ${t("orgtree.archived_suffix")}`,
                 }))}
             />
+            {tree.isError && (
+              <Alert variant="error">{errorMessage(tree.error, t("attendance.load_failed"))}</Alert>
+            )}
           </div>
           <div>
             <Label htmlFor="attendance-since">{t("attendance.since")}</Label>
@@ -237,11 +252,17 @@ export function AttendancePage(): JSX.Element {
             {t("attendance.export")}
           </Button>
         </div>
-        {guardBlocked && <Alert variant="warning">{t("attendance.too_long")}</Alert>}
+        {rangeInvalid ? (
+          <Alert variant="warning">{t("attendance.range_inverted")}</Alert>
+        ) : tooLong ? (
+          <Alert variant="warning">{t("attendance.too_long")}</Alert>
+        ) : null}
         {exportError && <Alert variant="error">{exportError}</Alert>}
       </Section>
 
-      {submitted === null ? null : report.isLoading ? (
+      {submitted === null ? (
+        <Empty title={t("attendance.pick_range")} />
+      ) : report.isLoading ? (
         <ListSkeleton rows={4} label={t("common.loading")} />
       ) : report.isError ? (
         <ErrorState

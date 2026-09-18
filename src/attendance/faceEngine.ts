@@ -23,11 +23,20 @@ export interface DetectedFace {
   score: number;
 }
 
+export interface DescribedFace {
+  box: FaceBox;
+  descriptor: number[];
+}
+
 let loading: Promise<void> | null = null;
 
 export function loadFaceModels(): Promise<void> {
   if (!loading) {
     loading = (async () => {
+      // The nobundle build registers the wasm backend but its .wasm binaries
+      // are not served, so left to itself tf.ready() tries wasm, logs a
+      // failure and only then falls back -- pick webgl (or cpu) up front.
+      if (!(await tf.setBackend("webgl"))) await tf.setBackend("cpu");
       await tf.ready();
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
       await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
@@ -57,15 +66,23 @@ export async function detectFaces(
   }));
 }
 
-// The expensive pass, run once per capture: the single largest face's 128-d
-// descriptor. null when no face is found in the full-resolution frame.
-export async function describeLargestFace(
+// The expensive pass, run once per capture: every face's landmarks and 128-d
+// descriptor in the full-resolution frame. Callers pick the face they want
+// (largest box = largest width*height).
+export async function describeFaces(
   input: HTMLVideoElement | HTMLCanvasElement,
-): Promise<number[] | null> {
-  const result = await faceapi
-    .detectSingleFace(input, DETECTOR_OPTIONS)
+): Promise<DescribedFace[]> {
+  const results = await faceapi
+    .detectAllFaces(input, DETECTOR_OPTIONS)
     .withFaceLandmarks(true)
-    .withFaceDescriptor();
-  if (!result) return null;
-  return Array.from(result.descriptor);
+    .withFaceDescriptors();
+  return results.map((d) => ({
+    box: {
+      x: d.detection.box.x,
+      y: d.detection.box.y,
+      width: d.detection.box.width,
+      height: d.detection.box.height,
+    },
+    descriptor: Array.from(d.descriptor),
+  }));
 }

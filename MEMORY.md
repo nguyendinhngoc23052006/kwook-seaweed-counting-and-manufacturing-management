@@ -15,6 +15,15 @@
 - PL/pgSQL resolves `new.<field>` at plan time even inside a short-circuited
   `or`; a trigger shared by several tables must branch on `tg_table_name` into
   table-specific variables first.
+- **Three-valued logic bypasses gates.** For a caller with no `persons` row
+  (a door device, a fresh signup) `org_current_person_id()` is NULL, so
+  `not (false or NULL)` is NULL and `if not (...) then raise` never raises.
+  Every gate is `coalesce(<predicate>, false)`.
+- A `lateral fn(constants)` in a test is evaluated **once** and cross-joined
+  (an uncorrelated function scan); to call an RPC N times make an argument
+  depend on the series (`now() - g * interval '1 second'`).
+- `reset request.jwt.claims` leaves `''`, which `::json` rejects inside the
+  guards; switch claims to the admin's sub instead when seeding as `postgres`.
 
 ## Org model gotchas
 
@@ -42,9 +51,21 @@
 - Faces are matched **inside** `camera_attendance_capture`; the phone sends a
   128-number embedding plus `FACE_MODEL_VERSION` and reads nothing back but
   the verdict. `person_face_embeddings` has no client grant at all.
-- Cooldown is a **symmetric** window around the capture time (outbox replays
-  arrive out of order); with cooldown 0 only the deterministic id
-  (device, person, minute) dedupes.
+- Cooldown is a **symmetric** window per (person, door kind) — two doors of
+  the same kind do not double-log; with cooldown 0 only the deterministic id
+  (device, person, minute) dedupes. A door matches only people seated at or
+  below its own unit, trusts the phone clock to two minutes, never returns
+  the match distance, and refuses more than 20 captures a minute.
+- Self-enrolment is the `enroll_own_face` capability (granted per unit);
+  a manager enrols people below via `maintain_person_profile`. Without the
+  capability, any worker could enrol a colleague's face as their own.
+- The report scopes people by seats held **at any point in the range**
+  (`org_persons_seated_in_during`), pairs across the range edges (events
+  16 h either side take part), and reports an open check-in younger than
+  16 h as `on_site`, not as a missing punch.
+- face-api's `detectSingleFace` returns the highest-*score* face, not the
+  largest; the door describes all faces and picks the largest one inside
+  the zone.
 - Matching is a plain `real[]` unnest: 45 ms per capture at 2,000 enrolled
   people, linear. Past ~20k people the seam is `vector(128)` + an HNSW index
   in one migration; the RPC signature does not change.

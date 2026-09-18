@@ -14,13 +14,12 @@ export function endOfDayIso(date: string): string {
   return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
 }
 
-// The other half of the same promise: a range that starts "from today" must
-// start at local midnight, not UTC midnight -- the same 07:00-in-Hà-Nội gap
-// as endOfDayIso, on the other end of the day.
-export function startOfDayIso(date: string): string {
+// The report buckets days in Vietnam time in SQL, so a range's edges must be
+// Vietnam midnights no matter what zone the browser itself runs in.
+export function vietnamDayStartIso(date: string, plusDays = 0): string {
   const parts = date.split("-").map(Number);
   const year = parts[0] ?? 0;
   const month = parts[1] ?? 1;
   const day = parts[2] ?? 1;
-  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString();
+  return new Date(Date.UTC(year, month - 1, day + plusDays) - 7 * 3600 * 1000).toISOString();
 }

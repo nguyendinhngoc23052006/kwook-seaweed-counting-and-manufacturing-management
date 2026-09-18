@@ -7,7 +7,7 @@ import {
   largestFace,
   StabilityGate,
 } from "./attendanceLogic";
-import { describeLargestFace, detectFaces, loadFaceModels } from "./faceEngine";
+import { type DescribedFace, describeFaces, detectFaces, loadFaceModels } from "./faceEngine";
 
 // ~5 fps: fast enough that a stability gate of a few frames still resolves in
 // well under a second, slow enough to leave the main thread free for the video
@@ -30,6 +30,7 @@ export interface UseDoorCameraResult {
   error: string | null;
   candidate: boolean;
   flashing: boolean;
+  actualFacing: "user" | "environment" | null;
 }
 
 function setTorch(track: MediaStreamTrack | null, on: boolean): void {
@@ -54,12 +55,15 @@ export function useDoorCamera({
   config,
   onCapture,
   holdMs,
+  enabled,
 }: {
   config: AttendanceConfig;
   onCapture: (embedding: number[]) => Promise<void>;
   // After a capture the zone is ignored for this long, so one person standing
   // at the door is captured once, and the page has time to show the verdict.
   holdMs: number;
+  // A revoked door never opens the camera or takes the wake lock.
+  enabled: boolean;
 }): UseDoorCameraResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const configRef = useRef(config);
@@ -73,8 +77,10 @@ export function useDoorCamera({
   const [error, setError] = useState<string | null>(null);
   const [candidate, setCandidate] = useState(false);
   const [flashing, setFlashing] = useState(false);
+  const [actualFacing, setActualFacing] = useState<"user" | "environment" | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stream: MediaStream | null = null;
@@ -88,7 +94,8 @@ export function useDoorCamera({
       navigator.wakeLock
         .request("screen")
         .then((lock) => {
-          wakeLock = lock;
+          if (stopped) void lock.release().catch(() => undefined);
+          else wakeLock = lock;
         })
         .catch(() => undefined);
     };
@@ -109,8 +116,17 @@ export function useDoorCamera({
         }, flashMs);
         await sleep(Math.min(FLASH_LEAD_MS, flashMs));
       }
-      const descriptor = await describeLargestFace(video);
-      await onCaptureRef.current(descriptor ?? []);
+      const faces = await describeFaces(video);
+      let best: DescribedFace | null = null;
+      for (const face of faces) {
+        if (!isCaptureCandidate(face.box, video.videoWidth, video.videoHeight, configRef.current)) {
+          continue;
+        }
+        if (!best || face.box.width * face.box.height > best.box.width * best.box.height) {
+          best = face;
+        }
+      }
+      await onCaptureRef.current(best?.descriptor ?? []);
       await sleep(holdRef.current);
     };
 
@@ -118,20 +134,29 @@ export function useDoorCamera({
       if (stopped) return;
       try {
         const video = videoRef.current;
-        if (video && video.videoWidth > 0) {
-          const faces = await detectFaces(video);
-          const box = largestFace(faces.map((f) => f.box));
-          const isCandidate =
-            box !== null &&
-            isCaptureCandidate(box, video.videoWidth, video.videoHeight, configRef.current);
-          setCandidate(isCandidate);
-          if (gate.update(isCandidate) && !busy) {
-            busy = true;
-            try {
-              await capture(video);
-            } finally {
-              busy = false;
-              gate.reset();
+        if (video) {
+          // The <video> element only mounts once the boot sequence reaches
+          // "running"; attach the already-open stream here, on the first
+          // tick that sees it, rather than at boot when the ref is null.
+          if (stream && video.srcObject !== stream) {
+            video.srcObject = stream;
+            await video.play();
+          }
+          if (video.videoWidth > 0) {
+            const faces = await detectFaces(video);
+            const box = largestFace(faces.map((f) => f.box));
+            const isCandidate =
+              box !== null &&
+              isCaptureCandidate(box, video.videoWidth, video.videoHeight, configRef.current);
+            setCandidate(isCandidate);
+            if (gate.update(isCandidate) && !busy) {
+              busy = true;
+              try {
+                await capture(video);
+              } finally {
+                busy = false;
+                gate.reset();
+              }
             }
           }
         }
@@ -164,11 +189,10 @@ export function useDoorCamera({
           return;
         }
         track = stream.getVideoTracks()[0] ?? null;
-        const video = videoRef.current;
-        if (video) {
-          video.srcObject = stream;
-          await video.play();
-        }
+        const facingMode = track?.getSettings().facingMode;
+        setActualFacing(facingMode === "user" || facingMode === "environment" ? facingMode : null);
+        // The <video> element isn't mounted yet (phase is still
+        // "starting-camera"); the loop attaches srcObject once it is.
         acquireWakeLock();
         document.addEventListener("visibilitychange", onVisibilityChange);
         setPhase("running");
@@ -191,9 +215,10 @@ export function useDoorCamera({
       if (video) video.srcObject = null;
       void wakeLock?.release().catch(() => undefined);
     };
-    // Runs once on mount: config, onCapture and holdMs are read through the
-    // refs kept current above, so a re-render never restarts the camera.
-  }, []);
+    // Reruns only when `enabled` flips: config, onCapture and holdMs are read
+    // through the refs kept current above, so a re-render never restarts the
+    // camera on its own.
+  }, [enabled]);
 
-  return { videoRef, phase, error, candidate, flashing };
+  return { videoRef, phase, error, candidate, flashing, actualFacing };
 }

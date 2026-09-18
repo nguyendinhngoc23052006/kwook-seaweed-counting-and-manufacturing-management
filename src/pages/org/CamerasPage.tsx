@@ -42,12 +42,12 @@ function DeviceRow({
 }): JSX.Element {
   const h = health(d.last_seen_at);
   return (
-    <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-raised p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hairline bg-surface-raised p-3">
       <div>
         <div className="font-medium text-ink">{d.name}</div>
         <div className="text-xs text-ink-faint">{t(`device.role_${d.role}`)}</div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {d.revoked_at ? (
           <Pill tone="danger">{t("device.admin_revoked")}</Pill>
         ) : (
@@ -57,12 +57,23 @@ function DeviceRow({
           !d.revoked_at &&
           (d.role === "check_in" || d.role === "check_out") &&
           onConfigure && (
-            <Button size="sm" variant="ghost" onClick={() => onConfigure(d)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="whitespace-nowrap"
+              onClick={() => onConfigure(d)}
+            >
               {t("device.attendance_settings")}
             </Button>
           )}
         {canManage && !d.revoked_at && (
-          <Button size="sm" variant="danger" disabled={revoking} onClick={() => onRevoke(d.id)}>
+          <Button
+            size="sm"
+            variant="danger"
+            className="whitespace-nowrap"
+            disabled={revoking}
+            onClick={() => onRevoke(d.id)}
+          >
             {t("device.admin_revoke")}
           </Button>
         )}
