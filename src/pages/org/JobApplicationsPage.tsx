@@ -10,9 +10,87 @@ import { useT } from "../../lib/i18n";
 import { getMyCapabilityReach } from "../../services/capabilities";
 import {
   APPLICATIONS_PAGE,
+  getClosedApplicationCount,
   type JobApplication,
   listApplications,
+  listClosedApplications,
 } from "../../services/jobApplications";
+
+type TFn = ReturnType<typeof useT>;
+
+// Terminal-state applications (hired, not_selected, withdrawn), collapsed by
+// default -- same interaction shape as CapabilityHistoryDisclosure
+// (NodeCapabilityPanel.tsx): a toggle with the count in its own label, its own
+// paged query that only runs once opened.
+function ClosedApplicationsDisclosure({
+  jobId,
+  count,
+  t,
+}: {
+  jobId: string;
+  count: number;
+  t: TFn;
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  const [pages, setPages] = useState<string[]>([]);
+  const before = pages[pages.length - 1];
+
+  const closed = useQuery({
+    queryKey: ["jobs", "closed-applications", jobId, before ?? null],
+    queryFn: () => listClosedApplications(jobId, before),
+    enabled: open,
+  });
+
+  if (count === 0) return null;
+
+  const rows: JobApplication[] = closed.data ?? [];
+  const more = rows.length === APPLICATIONS_PAGE;
+  const lastCreatedAt = rows.at(-1)?.created_at;
+
+  return (
+    <div className="border-t border-hairline pt-4">
+      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? t("applicants.hide_closed") : t("applicants.show_closed", { count })}
+      </Button>
+      {open &&
+        (closed.isLoading ? (
+          <ListSkeleton rows={2} label={t("applicants.loading")} />
+        ) : closed.isError ? (
+          <ErrorState message={errorMessage(closed.error, t("applicants.load_failed"))} />
+        ) : rows.length === 0 ? (
+          <Empty title={t("applicants.empty")} />
+        ) : (
+          <div className="mt-3 space-y-3">
+            {rows.map((a) => (
+              <ApplicantCard key={a.id} a={a} />
+            ))}
+            {(more || pages.length > 0) && (
+              <div className="flex flex-wrap gap-2">
+                {pages.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setPages(pages.slice(0, -1))}
+                  >
+                    {t("applicants.previous")}
+                  </Button>
+                )}
+                {more && lastCreatedAt && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setPages([...pages, lastCreatedAt])}
+                  >
+                    {t("applicants.next")}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+    </div>
+  );
+}
 
 // Personal data belonging to people who do not work here. It is behind
 // org_admin() in the database and behind the same check here, and it will be
@@ -34,6 +112,13 @@ export function JobApplicationsPage(): JSX.Element {
   const applications = useQuery({
     queryKey: ["jobs", "applications", jobId ?? null, before ?? null],
     queryFn: () => listApplications(jobId ?? "", before),
+    enabled: isAdmin && Boolean(jobId),
+  });
+  // Read alongside the live page, not inside the disclosure -- the label has
+  // to say the right count before anyone has opened it.
+  const closedCount = useQuery({
+    queryKey: ["jobs", "closed-applications-count", jobId ?? null],
+    queryFn: () => getClosedApplicationCount(jobId ?? ""),
     enabled: isAdmin && Boolean(jobId),
   });
 
@@ -97,6 +182,8 @@ export function JobApplicationsPage(): JSX.Element {
           )}
         </div>
       )}
+
+      {jobId && <ClosedApplicationsDisclosure jobId={jobId} count={closedCount.data ?? 0} t={t} />}
     </div>
   );
 }

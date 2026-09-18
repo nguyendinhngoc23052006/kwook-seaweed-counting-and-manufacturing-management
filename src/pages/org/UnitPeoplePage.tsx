@@ -7,8 +7,10 @@ import { Pill } from "../../components/ui/Pill";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
+import { personStatusById, seatOccupantStatusTone } from "../../lib/orgLabels";
 import { getMyCapabilityReach } from "../../services/capabilities";
 import { findNode, getOrgTree } from "../../services/nodes";
+import { listVisiblePersons } from "../../services/people";
 
 // Who currently sits in this unit's seats. Assigning or vacating a seat is
 // the organisation chart's own job -- it owns the tree's seat-management UI,
@@ -24,6 +26,15 @@ export function UnitPeoplePage(): JSX.Element {
   const tree = useQuery({
     queryKey: ["org", "tree"],
     queryFn: getOrgTree,
+    enabled: isAdmin,
+  });
+  // Same cache key NodeCapabilityPanel/NodePage/OrgChartPage already read
+  // persons under. org_tree()'s holder join never checks status, so a
+  // departed or suspended occupant is looked up here rather than trusted at
+  // face value.
+  const persons = useQuery({
+    queryKey: ["org", "persons"],
+    queryFn: listVisiblePersons,
     enabled: isAdmin,
   });
 
@@ -43,6 +54,7 @@ export function UnitPeoplePage(): JSX.Element {
   }
 
   const seats = [...node.seats].sort((a, b) => a.rank_ordinal - b.rank_ordinal);
+  const personStatuses = personStatusById(persons.data ?? []);
 
   return (
     <div className="space-y-6">
@@ -61,28 +73,39 @@ export function UnitPeoplePage(): JSX.Element {
           <Empty title={t("orgtree.no_seats")} />
         ) : (
           <div className="space-y-2">
-            {seats.map((seat) => (
-              <div
-                key={seat.position_id}
-                className="flex items-center justify-between gap-2 border-b border-hairline pb-2 last:border-0 last:pb-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm text-ink">{seat.title}</div>
-                  <div className="text-xs text-ink-muted">{seat.rank_key}</div>
+            {seats.map((seat) => {
+              const occupantStatus = seat.person_id
+                ? personStatuses.get(seat.person_id)
+                : undefined;
+              const occupantTone = seatOccupantStatusTone(occupantStatus);
+              return (
+                <div
+                  key={seat.position_id}
+                  className="flex items-center justify-between gap-2 border-b border-hairline pb-2 last:border-0 last:pb-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm text-ink">{seat.title}</div>
+                    <div className="text-xs text-ink-muted">{seat.rank_key}</div>
+                  </div>
+                  {seat.person_id ? (
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/org/node/${nodeId}/person/${seat.person_id}`}
+                        className="text-sm font-medium text-accent-text hover:underline"
+                      >
+                        {seat.person_name}
+                        {seat.employee_code ? ` · ${seat.employee_code}` : ""}
+                      </Link>
+                      {occupantTone && (
+                        <Pill tone={occupantTone}>{t(`person_status.${occupantStatus}`)}</Pill>
+                      )}
+                    </div>
+                  ) : (
+                    <Pill>{t("orgtree.seat_vacant")}</Pill>
+                  )}
                 </div>
-                {seat.person_id ? (
-                  <Link
-                    to={`/org/node/${nodeId}/person/${seat.person_id}`}
-                    className="text-sm font-medium text-accent-text hover:underline"
-                  >
-                    {seat.person_name}
-                    {seat.employee_code ? ` · ${seat.employee_code}` : ""}
-                  </Link>
-                ) : (
-                  <Pill>{t("orgtree.seat_vacant")}</Pill>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
