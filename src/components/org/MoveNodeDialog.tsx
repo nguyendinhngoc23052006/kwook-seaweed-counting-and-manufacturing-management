@@ -7,6 +7,7 @@ import {
   breadcrumbOf,
   descendantIds,
   indexChildren,
+  isNodeEffectivelyActive,
   moveNode,
   type OrgTreeNode,
 } from "../../services/nodes";
@@ -88,12 +89,22 @@ export function MoveNodeDialog(props: Props): JSX.Element | null {
             ariaLabel={t("orgtree.move_new_parent")}
             options={[
               { value: "", label: t("orgtree.pick_node") },
-              ...choices.map((choice) => ({
-                value: choice.id,
-                label: breadcrumbOf(nodes, choice.id)
+              // org_guard_nodes freezes a NEW parent that is effectively
+              // inactive (20260924000000_freeze_inactive_subtrees.sql) --
+              // kept in the list rather than dropped so an admin can still
+              // see the branch exists and why it's unavailable, per
+              // TouchSelect's per-option disabled support.
+              ...choices.map((choice) => {
+                const choiceActive = isNodeEffectivelyActive(nodes, choice.id);
+                const label = breadcrumbOf(nodes, choice.id)
                   .map((step) => nodeLabel(step, locale))
-                  .join(" / "),
-              })),
+                  .join(" / ");
+                return {
+                  value: choice.id,
+                  label: choiceActive ? label : `${label} ${t("orgtree.archived_suffix")}`,
+                  disabled: !choiceActive,
+                };
+              }),
             ]}
           />
           {choices.length === 0 && (

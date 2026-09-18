@@ -28,6 +28,7 @@ import {
   getNodeHistory,
   getOrgTree,
   indexChildren,
+  isNodeEffectivelyActive,
   listNodeNatures,
   type OrgTreeNode,
   type OrgTreeSeat,
@@ -277,6 +278,7 @@ export function NodePage(): JSX.Element {
   const [assignSeat, setAssignSeat] = useState<OrgTreeSeat | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmReactivate, setConfirmReactivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const tree = useQuery({ queryKey: ["org", "tree"], queryFn: getOrgTree });
@@ -294,10 +296,20 @@ export function NodePage(): JSX.Element {
   // never checks, so a departed/suspended occupant needs it looked up here.
   const persons = useQuery({ queryKey: ["org", "persons"], queryFn: listVisiblePersons });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["org", "tree"] });
-    queryClient.invalidateQueries({ queryKey: ["org", "reach"] });
-    queryClient.invalidateQueries({ queryKey: ["org", "persons"] });
+  // Split by what each mutation actually changed, instead of one shared
+  // invalidate() -- chooseNature/setActive touch only this node's own row (so
+  // only "tree" and this node's own history), addChild/move can change what a
+  // non-strict reach walk sees but never touch persons, and only the
+  // seat/person-writing dialogs below need "persons" invalidated at all.
+  const invalidateTree = () => queryClient.invalidateQueries({ queryKey: ["org", "tree"] });
+  const invalidateReach = () => queryClient.invalidateQueries({ queryKey: ["org", "reach"] });
+  const invalidatePersons = () => queryClient.invalidateQueries({ queryKey: ["org", "persons"] });
+  const invalidateNodeHistory = (targetId: string) =>
+    queryClient.invalidateQueries({ queryKey: ["org", "node-history", targetId] });
+  const invalidateAfterSeatWrite = () => {
+    invalidateTree();
+    invalidateReach();
+    invalidatePersons();
   };
 
   const addChild = useMutation({
@@ -314,27 +326,31 @@ export function NodePage(): JSX.Element {
       setChildNature("");
       setShowChildForm(false);
       setError(null);
-      invalidate();
+      invalidateTree();
+      invalidateReach();
     },
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
 
   const chooseNature = useMutation({
     mutationFn: (target: string) => setNodeNature(target, natureDraft || null),
-    onSuccess: () => {
+    onSuccess: (_data, target) => {
       setNatureDraft("");
       setError(null);
-      invalidate();
+      invalidateTree();
+      invalidateNodeHistory(target);
     },
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
 
   const setActive = useMutation({
     mutationFn: (input: { id: string; active: boolean }) => setNodeActive(input.id, input.active),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setConfirmDeactivate(false);
+      setConfirmReactivate(false);
       setError(null);
-      invalidate();
+      invalidateTree();
+      invalidateNodeHistory(variables.id);
     },
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
@@ -397,6 +413,12 @@ export function NodePage(): JSX.Element {
   const seats = seatsByRank(node);
   const personStatuses = personStatusById(persons.data ?? []);
   const staffed = seats.filter((seat) => seat.person_id).length;
+
+  // Frozen if this node OR any ancestor is inactive (org_node_effectively_active,
+  // 20260924000000_freeze_inactive_subtrees.sql) -- node.active alone misses an
+  // active node sitting under an inactive ancestor, since deactivating a node
+  // never cascades the column to its children.
+  const effectivelyActive = isNodeEffectivelyActive(nodes, node.id);
 
   // What the viewer may actually do here. A control nobody may use is not
   // drawn at all — a disabled button reads as a broken app, a sentence reads
@@ -497,17 +519,38 @@ export function NodePage(): JSX.Element {
                 {t("orgtree.deactivate")}
               </Button>
             )
+          ) : confirmReactivate ? (
+            <>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={setActive.isPending}
+                onClick={() => setActive.mutate({ id: node.id, active: true })}
+              >
+                {setActive.isPending ? t("common.loading") : t("orgtree.reactivate_confirm")}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={setActive.isPending}
+                onClick={() => setConfirmReactivate(false)}
+              >
+                {t("common.cancel")}
+              </Button>
+            </>
           ) : (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={setActive.isPending}
-              onClick={() => setActive.mutate({ id: node.id, active: true })}
-            >
-              {setActive.isPending ? t("common.loading") : t("orgtree.reactivate")}
+            <Button size="sm" variant="secondary" onClick={() => setConfirmReactivate(true)}>
+              {t("orgtree.reactivate")}
             </Button>
           ))}
       </div>
+
+      {/* The one place this signal ever surfaces to someone who reached this
+          node directly (bookmark, move destination, shared link) -- the chart's
+          hide-by-default only protects its own default view. */}
+      {node.active && !effectivelyActive && (
+        <Alert variant="warning">{t("orgtree.archived_branch_banner")}</Alert>
+      )}
 
       {error && <Alert variant="error">{error}</Alert>}
 
@@ -555,9 +598,21 @@ export function NodePage(): JSX.Element {
         description={t("orgtree.children_hint")}
         action={
           canAddChild ? (
-            <Button size="sm" variant="secondary" onClick={() => setShowChildForm(!showChildForm)}>
-              {t("orgtree.add_child")}
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!effectivelyActive}
+                onClick={() => setShowChildForm(!showChildForm)}
+              >
+                {t("orgtree.add_child")}
+              </Button>
+              {!effectivelyActive && (
+                <span className="text-xs text-ink-muted">
+                  {t("orgtree.archived_write_blocked")}
+                </span>
+              )}
+            </div>
           ) : undefined
         }
       >
@@ -605,8 +660,11 @@ export function NodePage(): JSX.Element {
                 ]}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!childName.trim() || addChild.isPending}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="submit"
+                disabled={!childName.trim() || addChild.isPending || !effectivelyActive}
+              >
                 {addChild.isPending ? t("common.loading") : t("orgtree.create_child")}
               </Button>
               <Button
@@ -616,6 +674,11 @@ export function NodePage(): JSX.Element {
               >
                 {t("common.cancel")}
               </Button>
+              {!effectivelyActive && (
+                <span className="text-xs text-ink-muted">
+                  {t("orgtree.archived_write_blocked")}
+                </span>
+              )}
             </div>
           </form>
         )}
@@ -650,15 +713,22 @@ export function NodePage(): JSX.Element {
         description={t("orgtree.seats_hint")}
         action={
           canAppoint && node.nature !== null ? (
-            isField ? (
-              <Button size="sm" onClick={() => setAddFieldWorkerOpen(true)}>
-                {t("orgtree.add_person")}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                size="sm"
+                disabled={!effectivelyActive}
+                onClick={() =>
+                  isField ? setAddFieldWorkerOpen(true) : setCreatePositionOpen(true)
+                }
+              >
+                {isField ? t("orgtree.add_person") : t("orgtree.add_position")}
               </Button>
-            ) : (
-              <Button size="sm" onClick={() => setCreatePositionOpen(true)}>
-                {t("orgtree.add_position")}
-              </Button>
-            )
+              {!effectivelyActive && (
+                <span className="text-xs text-ink-muted">
+                  {t("orgtree.archived_write_blocked")}
+                </span>
+              )}
+            </div>
           ) : undefined
         }
       >
@@ -712,13 +782,33 @@ export function NodePage(): JSX.Element {
                   }
                   trailing={
                     canAppoint ? (
-                      <Button
-                        size="sm"
-                        variant={seat.person_id ? "secondary" : "primary"}
-                        onClick={() => setAssignSeat(seat)}
-                      >
-                        {seat.person_id ? t("orgtree.manage_seat") : t("orgtree.assign")}
-                      </Button>
+                      seat.person_id ? (
+                        // Reassigning here would still hit org_seat_person's
+                        // appoint guard on an archived branch, but this button
+                        // is also the only path to vacating an occupied seat
+                        // (frozen writes never block vacate) -- it stays
+                        // enabled unconditionally so vacate always stays
+                        // reachable.
+                        <Button size="sm" variant="secondary" onClick={() => setAssignSeat(seat)}>
+                          {t("orgtree.manage_seat")}
+                        </Button>
+                      ) : (
+                        <span className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            disabled={!effectivelyActive}
+                            onClick={() => setAssignSeat(seat)}
+                          >
+                            {t("orgtree.assign")}
+                          </Button>
+                          {!effectivelyActive && (
+                            <span className="text-xs text-ink-muted">
+                              {t("orgtree.archived_write_blocked")}
+                            </span>
+                          )}
+                        </span>
+                      )
                     ) : undefined
                   }
                 />
@@ -747,6 +837,7 @@ export function NodePage(): JSX.Element {
         nodeId={node.id}
         nodeName={nodeLabel(node, locale)}
         canConfigure={canConfigure}
+        effectivelyActive={effectivelyActive}
       />
 
       {canAddChild && (
@@ -757,7 +848,11 @@ export function NodePage(): JSX.Element {
         <MoveNodeDialog
           open={true}
           onClose={() => setMoveOpen(false)}
-          onMoved={invalidate}
+          onMoved={() => {
+            invalidateTree();
+            invalidateReach();
+            invalidateNodeHistory(node.id);
+          }}
           node={node}
           nodes={nodes}
         />
@@ -767,7 +862,7 @@ export function NodePage(): JSX.Element {
         <AddFieldWorkerDialog
           open={addFieldWorkerOpen}
           onClose={() => setAddFieldWorkerOpen(false)}
-          onCreated={invalidate}
+          onCreated={invalidateAfterSeatWrite}
           node={node}
           nodes={nodes}
           ranks={ranks.data ?? []}
@@ -781,7 +876,7 @@ export function NodePage(): JSX.Element {
         <CreatePositionDialog
           open={createPositionOpen}
           onClose={() => setCreatePositionOpen(false)}
-          onCreated={invalidate}
+          onCreated={invalidateAfterSeatWrite}
           node={node}
           nodes={nodes}
           ranks={ranks.data ?? []}
@@ -795,7 +890,7 @@ export function NodePage(): JSX.Element {
         <AssignSeatDialog
           open={true}
           onClose={() => setAssignSeat(null)}
-          onDone={invalidate}
+          onDone={invalidateAfterSeatWrite}
           seat={assignSeat}
           node={node}
           canMaintainProfile={canMaintainProfile}

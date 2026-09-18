@@ -34,6 +34,11 @@ interface Props {
   nodeId: string;
   nodeName: string;
   canConfigure: boolean;
+  // Computed the same way as NodePage's own gate (isNodeEffectivelyActive):
+  // false blocks only NEW grants (org_guard_node_capabilities freezes
+  // granted=true on an inactive branch) -- revoke must keep working
+  // unconditionally, so it is never checked below.
+  effectivelyActive: boolean;
 }
 
 interface PendingChange {
@@ -121,7 +126,7 @@ function CapabilityHistoryDisclosure(props: {
 // — no inheritance, so these rows are the whole account — and the history
 // behind each one.
 export function NodeCapabilityPanel(props: Props): JSX.Element {
-  const { nodeId, nodeName, canConfigure } = props;
+  const { nodeId, nodeName, canConfigure, effectivelyActive } = props;
   const t = useT();
   const queryClient = useQueryClient();
 
@@ -170,17 +175,23 @@ export function NodeCapabilityPanel(props: Props): JSX.Element {
       }
       return input.granted ? grantCapability(args) : revokeCapability(args);
     },
-    onSuccess: (rows) => {
+    onSuccess: (rows, input) => {
       setError(null);
       setWritten(rows);
       setReason("");
       setPreview(null);
-      queryClient.invalidateQueries({
-        queryKey: ["org", "node-grants", nodeId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["org", "capability-history", nodeId],
-      });
+      if (input.subtree) {
+        // A subtree change writes one row per descendant the preview
+        // enumerated (org_set_capability, services/capabilities.ts:139-141),
+        // not just this node -- invalidate the bare key prefixes (no nodeId
+        // suffix) so every open grants/history panel anywhere refetches,
+        // rather than only this node's own two queries.
+        queryClient.invalidateQueries({ queryKey: ["org", "node-grants"] });
+        queryClient.invalidateQueries({ queryKey: ["org", "capability-history"] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["org", "node-grants", nodeId] });
+        queryClient.invalidateQueries({ queryKey: ["org", "capability-history", nodeId] });
+      }
       queryClient.invalidateQueries({ queryKey: ["org", "tree"] });
       queryClient.invalidateQueries({ queryKey: ["org", "reach"] });
     },
@@ -258,20 +269,31 @@ export function NodeCapabilityPanel(props: Props): JSX.Element {
                 }
                 trailing={
                   canConfigure ? (
-                    <Button
-                      size="sm"
-                      variant={isGranted ? "secondary" : "primary"}
-                      disabled={change.isPending}
-                      onClick={() =>
-                        change.mutate({
-                          capabilityKey: type.key,
-                          granted: !isGranted,
-                          subtree: false,
-                        })
-                      }
-                    >
-                      {isGranted ? t("caps.revoke") : t("caps.grant")}
-                    </Button>
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant={isGranted ? "secondary" : "primary"}
+                        // Only a NEW grant is frozen on an archived branch
+                        // (org_guard_node_capabilities) -- revoke (isGranted
+                        // true, about to flip to false) must stay enabled
+                        // unconditionally.
+                        disabled={change.isPending || (!isGranted && !effectivelyActive)}
+                        onClick={() =>
+                          change.mutate({
+                            capabilityKey: type.key,
+                            granted: !isGranted,
+                            subtree: false,
+                          })
+                        }
+                      >
+                        {isGranted ? t("caps.revoke") : t("caps.grant")}
+                      </Button>
+                      {!isGranted && !effectivelyActive && (
+                        <span className="text-xs text-ink-muted">
+                          {t("orgtree.archived_write_blocked")}
+                        </span>
+                      )}
+                    </span>
                   ) : undefined
                 }
               />
@@ -415,13 +437,25 @@ export function NodeCapabilityPanel(props: Props): JSX.Element {
                 </ul>
                 <Button
                   variant="danger"
-                  disabled={changing.length === 0 || change.isPending}
+                  // preview.granted is one value for the whole batch (this is
+                  // either a grant call or a revoke call, never mixed), so a
+                  // grant preview means every changing row is a NEW grant --
+                  // frozen on an archived branch. A revoke preview is never
+                  // blocked, matching the per-row button above.
+                  disabled={
+                    changing.length === 0 ||
+                    change.isPending ||
+                    (preview.granted && !effectivelyActive)
+                  }
                   onClick={() => change.mutate(preview)}
                 >
                   {change.isPending
                     ? t("common.loading")
                     : t("caps.apply_subtree", { count: changing.length })}
                 </Button>
+                {preview.granted && !effectivelyActive && (
+                  <p className="text-xs text-ink-muted">{t("orgtree.archived_write_blocked")}</p>
+                )}
                 <p className="text-xs text-ink-muted">{t("caps.no_undo")}</p>
               </div>
             ))}
