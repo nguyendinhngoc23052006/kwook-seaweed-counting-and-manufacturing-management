@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Kwook design tokens, reused verbatim from kwook-management-hub.
+
+   Two layers on purpose. The RAW layer below is plain CSS custom properties,
+   redefined for dark mode; the @theme inline block binds Tailwind's colour
+   names to those variables by REFERENCE, so a utility like `bg-brand-surface`
+   emits `var(--kw-surface)` and follows the theme at runtime instead of being
+   frozen at build time.
+
+   This file is loaded BEFORE styles.css (see main.tsx) precisely so that
+   styles.css -- the existing device/admin design system this repo already
+   ships -- keeps the last word in the cascade for every selector the two
+   touch in common (`*`, `body`, etc.). Tailwind's own reset layer is global
+   by default; ordering it first is what stops it from silently repainting
+   the existing factory-floor pages.
+
+   Colour rule: the four petal hues are brand, not text. Gold (~1.9:1), green
+   (~2.3:1) and red (~4.3:1) all fail WCAG AA as body text on white, so each
+   status ships as a triplet -- `-text` (AA-safe ink), plain (the fill, for
+   dots, bars and chips) and `-subtle` (a tint for backgrounds). Petal blue
+   #336eb4 measures 5.2:1 on white and is the one hue safe to set as text.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces and ink */
+  --kw-surface: #ffffff;
+  --kw-surface-raised: #ffffff;
+  --kw-surface-sunken: #eef2ec;
+  --kw-surface-muted: #f7f9f5;
+  --kw-ink: #373536;
+  --kw-ink-muted: #68706a;
+  --kw-ink-faint: #6b736c;
+  --kw-hairline: #bcc7b9;
+  --kw-hairline-strong: #8d9a8a;
+
+  /* Accent (petal blue) */
+  --kw-accent: #336eb4;
+  --kw-accent-strong: #27578f;
+  --kw-accent-subtle: #e8f0f9;
+  --kw-accent-on: #ffffff;
+  /* The fill measures 4.53:1 on its own tint -- AA by 0.03, which is no
+     margin at all. Text on a tint uses this darker ink instead, so a future
+     nudge to the brand blue cannot silently drop the pair below AA. */
+  --kw-accent-text: #1f4b7f;
+
+  /* Status triplets */
+  --kw-success: #79b84f;
+  --kw-success-text: #2c6b21;
+  --kw-success-subtle: #eef6e8;
+  --kw-warning: #f9b431;
+  --kw-warning-text: #7a5200;
+  --kw-warning-subtle: #fdf3e0;
+  --kw-danger: #e4353c;
+  --kw-danger-fill: #d21f27;
+  --kw-danger-text: #b01019;
+  --kw-danger-subtle: #fdecec;
+
+  /* Focus ring -- one definition, used by every interactive element */
+  --kw-ring: #336eb4;
+
+  /* Elevation */
+  --kw-shadow-sm: 0 1px 2px rgb(23 26 23 / 0.06);
+  --kw-shadow-md: 0 2px 8px rgb(23 26 23 / 0.08);
+  --kw-shadow-lg: 0 8px 24px rgb(23 26 23 / 0.12);
+}
+
+/* Dark mode. Guarded so an explicit data-theme="light" always wins over the
+   OS preference, and repeated verbatim for an explicit data-theme="dark". */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --kw-surface: #14171a;
+    --kw-surface-raised: #1c2025;
+    --kw-surface-sunken: #0e1114;
+    --kw-surface-muted: #1c2025;
+    --kw-ink: #e8eae8;
+    --kw-ink-muted: #a3aaa5;
+    --kw-ink-faint: #949c96;
+    --kw-hairline: #434c58;
+    --kw-hairline-strong: #5d6875;
+
+    --kw-accent: #6ea6e4;
+    --kw-accent-strong: #8fbdef;
+    --kw-accent-subtle: #17283a;
+    --kw-accent-on: #0e1114;
+    --kw-accent-text: #9cc6ef;
+
+    --kw-success: #79b84f;
+    --kw-success-text: #9ed678;
+    --kw-success-subtle: #17240f;
+    --kw-warning: #f9b431;
+    --kw-warning-text: #f0c46a;
+    --kw-warning-subtle: #2a1f0a;
+    --kw-danger: #e4353c;
+    --kw-danger-fill: #d21f27;
+    --kw-danger-text: #f58b8f;
+    --kw-danger-subtle: #2d1113;
+
+    --kw-ring: #6ea6e4;
+
+    --kw-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --kw-shadow-md: 0 2px 8px rgb(0 0 0 / 0.5);
+    --kw-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --kw-surface: #14171a;
+  --kw-surface-raised: #1c2025;
+  --kw-surface-sunken: #0e1114;
+  --kw-surface-muted: #1c2025;
+  --kw-ink: #e8eae8;
+  --kw-ink-muted: #a3aaa5;
+  --kw-ink-faint: #949c96;
+  --kw-hairline: #434c58;
+  --kw-hairline-strong: #5d6875;
+
+  --kw-accent: #6ea6e4;
+  --kw-accent-strong: #8fbdef;
+  --kw-accent-subtle: #17283a;
+  --kw-accent-on: #0e1114;
+  --kw-accent-text: #9cc6ef;
+
+  --kw-success: #79b84f;
+  --kw-success-text: #9ed678;
+  --kw-success-subtle: #17240f;
+  --kw-warning: #f9b431;
+  --kw-warning-text: #f0c46a;
+  --kw-warning-subtle: #2a1f0a;
+  --kw-danger: #e4353c;
+  --kw-danger-fill: #d21f27;
+  --kw-danger-text: #f58b8f;
+  --kw-danger-subtle: #2d1113;
+
+  --kw-ring: #6ea6e4;
+
+  --kw-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --kw-shadow-md: 0 2px 8px rgb(0 0 0 / 0.5);
+  --kw-shadow-lg: 0 8px 24px rgb(0 0 0 / 0.6);
+}
+
+@theme inline {
+  /* Legacy names -- kept so existing classes compile, now theme-aware. */
+  --color-brand-navy: var(--kw-accent);
+  --color-brand-navy-dark: var(--kw-accent-strong);
+  --color-brand-cream: var(--kw-surface-sunken);
+  --color-brand-cream-light: var(--kw-surface-muted);
+  --color-brand-ink: var(--kw-ink);
+  --color-brand-muted: var(--kw-ink-muted);
+  --color-brand-hairline: var(--kw-hairline);
+  --color-brand-hairline-strong: var(--kw-hairline-strong);
+  --color-brand-surface: var(--kw-surface);
+  --color-brand-gold: var(--kw-warning);
+  --color-brand-green: var(--kw-success);
+  --color-brand-red: var(--kw-danger);
+
+  /* Semantic names -- what new code should use. */
+  --color-surface: var(--kw-surface);
+  --color-surface-raised: var(--kw-surface-raised);
+  --color-surface-sunken: var(--kw-surface-sunken);
+  --color-surface-muted: var(--kw-surface-muted);
+  --color-ink: var(--kw-ink);
+  --color-ink-muted: var(--kw-ink-muted);
+  --color-ink-faint: var(--kw-ink-faint);
+  --color-hairline: var(--kw-hairline);
+  --color-hairline-strong: var(--kw-hairline-strong);
+  --color-accent: var(--kw-accent);
+  --color-accent-strong: var(--kw-accent-strong);
+  --color-accent-subtle: var(--kw-accent-subtle);
+  --color-accent-text: var(--kw-accent-text);
+  --color-accent-on: var(--kw-accent-on);
+  --color-success: var(--kw-success);
+  --color-success-text: var(--kw-success-text);
+  --color-success-subtle: var(--kw-success-subtle);
+  --color-warning: var(--kw-warning);
+  --color-warning-text: var(--kw-warning-text);
+  --color-warning-subtle: var(--kw-warning-subtle);
+  --color-danger: var(--kw-danger);
+  --color-danger-fill: var(--kw-danger-fill);
+  --color-danger-text: var(--kw-danger-text);
+  --color-danger-subtle: var(--kw-danger-subtle);
+
+  --shadow-sm: var(--kw-shadow-sm);
+  --shadow-md: var(--kw-shadow-md);
+  --shadow-lg: var(--kw-shadow-lg);
+
+  --font-display: "Barlow Semi Condensed", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Type scale. Vietnamese stacks a tone mark above a vowel mark -- the
+   ascenders on e-circumflex-grave and o-horn-tilde run higher than any Latin
+   glyph -- so no step goes below a 1.28 line-height and nothing in the app
+   uses leading-none or leading-tight. Below that, diacritics clip against any
+   overflow-hidden ancestor and two stacked marks collide with the line above. */
+@theme inline {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1rem;
+  --text-base--line-height: 1.55;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.28;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 1.28;
+}
+
+/* One focus treatment everywhere. Interactive elements opt out of the UA
+   outline only when they provide this. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--kw-ring);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
