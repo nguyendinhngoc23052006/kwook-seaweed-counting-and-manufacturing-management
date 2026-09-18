@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FaceEnrollmentPanel } from "../../components/org/FaceEnrollmentPanel";
 import {
   bankPatchOf,
   emptyPersonDraft,
@@ -192,6 +193,8 @@ export function PersonPage(): JSX.Element {
           )}
         </div>
       </Section>
+
+      <FaceEnrollmentPanel personId={personId} canEnroll={canEditProfile} />
     </div>
   );
 }

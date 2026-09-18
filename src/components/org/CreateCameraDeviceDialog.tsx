@@ -10,7 +10,14 @@ import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
 import { TouchSelect } from "./TouchSelect";
 
-const ROLES: CameraDeviceRole[] = ["counting", "compliance", "provisioning", "overview"];
+const ROLES: CameraDeviceRole[] = [
+  "counting",
+  "check_in",
+  "check_out",
+  "compliance",
+  "provisioning",
+  "overview",
+];
 
 // The generated credential is shown exactly once, here, and never persisted
 // anywhere in plaintext -- not in this component's state after the dialog

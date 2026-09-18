@@ -8,11 +8,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
 interface CreateDeviceRequest {
   nodeId: string;
   name: string;
-  role: "provisioning" | "counting" | "compliance" | "overview";
+  role: "provisioning" | "counting" | "compliance" | "overview" | "check_in" | "check_out";
   stationId?: string | null;
 }
 
-const DEVICE_ROLES = ["provisioning", "counting", "compliance", "overview"];
+const DEVICE_ROLES = [
+  "provisioning",
+  "counting",
+  "compliance",
+  "overview",
+  "check_in",
+  "check_out",
+];
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {

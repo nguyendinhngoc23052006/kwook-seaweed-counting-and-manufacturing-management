@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useEffect, useState } from "react";
+import { FaceEnrollmentPanel } from "../../components/org/FaceEnrollmentPanel";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -161,6 +162,8 @@ export function ProfilePage(): JSX.Element {
           })()
         )}
       </Section>
+
+      {person && <FaceEnrollmentPanel personId={person.id} canEnroll />}
 
       {person && (
         <Section title={t("profile.contact_title")} description={t("profile.contact_hint")}>

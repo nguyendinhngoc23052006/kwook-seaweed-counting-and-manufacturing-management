@@ -42,3 +42,34 @@ export async function loadProfile(): Promise<Profile | null> {
   if (error) throw error;
   return (data as Profile | null) ?? null;
 }
+
+export type DoorRole = "check_in" | "check_out";
+
+export interface DoorCamera {
+  id: string;
+  org_node_id: string;
+  name: string;
+  role: DoorRole;
+  attendance_config: unknown;
+  revoked_at: string | null;
+}
+
+function isDoorRole(role: string): role is DoorRole {
+  return role === "check_in" || role === "check_out";
+}
+
+// Identity only, same shape as loadDeviceConfig above but for the org camera
+// stack: what this door does is the owner's to set, read from camera_devices
+// and never chosen here (rule 1 -- the phone reads nothing about people back).
+export async function loadDoorCamera(profileId: string): Promise<DoorCamera | null> {
+  const { data, error } = await supabase()
+    .from("camera_devices")
+    .select("id, org_node_id, name, role, attendance_config, revoked_at")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = data as { role: string } & Omit<DoorCamera, "role">;
+  if (!isDoorRole(row.role)) return null;
+  return { ...row, role: row.role };
+}

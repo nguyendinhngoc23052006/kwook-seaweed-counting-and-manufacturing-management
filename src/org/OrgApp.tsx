@@ -14,6 +14,7 @@ import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
 import { supabase } from "../lib/supabaseClient";
 import Login from "../pages/Login";
+import { AttendancePage } from "../pages/org/AttendancePage";
 import { CamerasPage } from "../pages/org/CamerasPage";
 import { JobApplicationsPage } from "../pages/org/JobApplicationsPage";
 import { JobPostingsPage } from "../pages/org/JobPostingsPage";
@@ -91,6 +92,11 @@ function OrgRoutes() {
       <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
       <Route path="/org/cameras" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
       <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
+      <Route
+        path="/org/attendance"
+        element={<Navigate to={`/org/attendance/${rootNodeId}`} replace />}
+      />
+      <Route path="/org/attendance/:nodeId" element={<AttendancePage />} />
       <Route path="/org/chart" element={<OrgChartPage />} />
       <Route path="/org/jobs" element={<JobPostingsPage />} />
       <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
@@ -131,6 +137,11 @@ function OrgNav({ rootNodeId }: { rootNodeId: string }) {
     { to: `/org/node/${rootNodeId}`, label: t("nav.tree"), match: "/org/node" },
     { to: "/org/chart", label: t("nav.chart"), match: "/org/chart" },
     { to: `/org/cameras/${rootNodeId}`, label: t("nav.cameras"), match: "/org/cameras" },
+    {
+      to: `/org/attendance/${rootNodeId}`,
+      label: t("nav.attendance"),
+      match: "/org/attendance",
+    },
     { to: "/org/jobs", label: t("nav.jobs"), match: "/org/jobs" },
     { to: "/org/work", label: t("nav.work"), match: "/org/work" },
     { to: "/org/notifications", label: t("nav.notifications"), match: "/org/notifications" },

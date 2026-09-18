@@ -13,3 +13,14 @@ export function endOfDayIso(date: string): string {
   const day = parts[2] ?? 1;
   return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
 }
+
+// The other half of the same promise: a range that starts "from today" must
+// start at local midnight, not UTC midnight -- the same 07:00-in-Hà-Nội gap
+// as endOfDayIso, on the other end of the day.
+export function startOfDayIso(date: string): string {
+  const parts = date.split("-").map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString();
+}

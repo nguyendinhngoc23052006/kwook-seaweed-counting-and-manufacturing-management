@@ -1,9 +1,16 @@
 // Hand-written, not generated -- this repo has no `supabase generate types`
 // pipeline wired to a linked project yet. Shapes match the migrations that
 // define them (20260920000000_org_foundation.sql, 20260920010000_camera_devices.sql,
-// 20260921000000_camera_export.sql); keep them in sync by hand until that changes.
+// 20260921000000_camera_export.sql, 20260924030000_attendance_cameras.sql); keep
+// them in sync by hand until that changes.
 
-export type CameraDeviceRole = "provisioning" | "counting" | "compliance" | "overview";
+export type CameraDeviceRole =
+  | "provisioning"
+  | "counting"
+  | "compliance"
+  | "overview"
+  | "check_in"
+  | "check_out";
 
 export interface CameraDevice {
   id: string;
@@ -11,6 +18,7 @@ export interface CameraDevice {
   station_id: string | null;
   name: string;
   role: CameraDeviceRole;
+  attendance_config: Record<string, unknown>;
   last_seen_at: string | null;
   app_version: string | null;
   algorithm_version: string | null;
