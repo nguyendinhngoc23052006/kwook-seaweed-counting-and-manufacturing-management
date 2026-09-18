@@ -8,6 +8,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import { Button } from "../components/ui/Button";
 import { errorMessage } from "../lib/errorMessage";
 import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
@@ -18,6 +19,11 @@ import { JobApplicationsPage } from "../pages/org/JobApplicationsPage";
 import { JobPostingsPage } from "../pages/org/JobPostingsPage";
 import { WorkPage } from "../pages/org/WorkPage";
 import { OrgErrorBoundary } from "./OrgErrorBoundary";
+
+async function signOut() {
+  await supabase().auth.signOut();
+  window.location.reload();
+}
 
 // The org-admin section (capability-gated cameras today; org chart, hiring,
 // tasks to follow) has no node-tree browsing page yet -- there is exactly one
@@ -83,20 +89,25 @@ function OrgNav({ rootNodeId }: { rootNodeId: string }) {
     { to: "/org/work", label: t("nav.work"), match: "/org/work" },
   ];
   return (
-    <nav className="mb-6 flex gap-1 border-b border-hairline">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.to}
-          to={tab.to}
-          className={`min-h-11 rounded-t-lg px-4 py-2 text-sm font-medium ${
-            location.pathname.startsWith(tab.match)
-              ? "border-b-2 border-accent text-accent-text"
-              : "text-ink-muted hover:text-ink"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
+    <nav className="mb-6 flex items-center justify-between border-b border-hairline">
+      <div className="flex gap-1">
+        {tabs.map((tab) => (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            className={`min-h-11 rounded-t-lg px-4 py-2 text-sm font-medium ${
+              location.pathname.startsWith(tab.match)
+                ? "border-b-2 border-accent text-accent-text"
+                : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
+      <Button variant="ghost" size="sm" onClick={signOut}>
+        {t("common.sign_out")}
+      </Button>
     </nav>
   );
 }
