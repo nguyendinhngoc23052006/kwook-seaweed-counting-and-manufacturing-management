@@ -1,10 +1,11 @@
 import { format } from "date-fns";
-import type { JSX } from "react";
+import { type JSX, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../../lib/i18n";
 import { isOverdue, type TaskCard as Task } from "../../services/tasks";
 import { Button } from "../ui/Button";
 import { Pill } from "../ui/Pill";
+import { TaskCommentsThread } from "./TaskCommentsThread";
 
 interface Props {
   task: Task;
@@ -30,6 +31,7 @@ export function TaskCardView(props: Props): JSX.Element {
   const { t, locale } = useI18n();
   const late = isOverdue(task);
   const counterpart = side === "mine" ? task.by_seat : task.to_seat;
+  const [showComments, setShowComments] = useState(false);
 
   return (
     <article className="rounded-lg border border-hairline bg-surface-raised p-4">
@@ -114,6 +116,15 @@ export function TaskCardView(props: Props): JSX.Element {
               {t("work.cancel")}
             </Button>
           )}
+        </div>
+      )}
+
+      <Button size="sm" variant="ghost" className="mt-2" onClick={() => setShowComments((v) => !v)}>
+        {showComments ? t("comments.hide") : t("comments.show")}
+      </Button>
+      {showComments && (
+        <div className="mt-2 border-t border-hairline pt-3">
+          <TaskCommentsThread taskId={task.id} />
         </div>
       )}
     </article>

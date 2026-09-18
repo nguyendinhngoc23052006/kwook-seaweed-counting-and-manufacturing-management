@@ -1,8 +1,11 @@
 # CLAUDE.md — the rules this project obeys
 
-Seaweed leaf counting, PPE compliance and station supervision for Kwook.
-Phones analyse their own camera on-device and send results; a Cloudflare Worker
-serves the app and ingests them; Supabase stores them; GitHub gates every deploy.
+Seaweed leaf counting, PPE compliance and station supervision for Kwook, plus
+the `/org` management hub — org chart, hiring, tasks, notifications — that
+runs the people who run those stations. One app, two audiences: the floor
+(device/wall screens) and the desk (`/org`). Phones analyse their own camera
+on-device and send results; a Cloudflare Worker serves the app and ingests
+them; Supabase stores them; GitHub gates every deploy.
 
 ## Scope (generated — do not hand-edit)
 
@@ -181,6 +184,35 @@ PR.
   `src/lib/errorMessage.ts` owns this; route every user-facing error through it.
 - **Edge Function logic is tested without Deno:** extract each function's pure
   logic into helper modules and test those with Vitest — no Deno runtime in CI.
+- **Three separate routers, one repo:** the device/wall app (`App.tsx`), the
+  `/org` management hub (`src/org/OrgApp.tsx`), and the public careers site
+  (`src/public/PublicJobsApp.tsx`) are three independent `BrowserRouter`
+  trees. A `<Link>`/`<NavLink>` from one into another silently resolves to
+  nothing — cross-router navigation must be a plain `<a href>`.
+
+### The `/org` management hub
+
+- **Authority lives in seats, not accounts.** `persons` → `positions` (ranks
+  staff/supervisor/manager/director/ceo, lower ordinal = more senior) →
+  `position_holders` (current holder = latest `effective_from`).
+  `profiles.role` is a **synced projection** of this model
+  (`20260923000000_role_unification.sql` triggers it on every seat/sysadmin
+  change) — never write `profiles.role` directly, a seat change will
+  overwrite it.
+- **Access is capability-based**, layered on top of the legacy
+  `profiles.role` gate rather than replacing it: `node_capabilities` grants
+  one of the 14 `capability_types` (`src/services/capabilities.ts`) to an org
+  node and its subtree; `org_capability_reaches()` is the one function every
+  RLS policy and UI gate calls. `org_capability_history()` reads the same
+  append-new table for the audit view — reach for the existing
+  `configure_child_capabilities` capability before adding a new one.
+- **Hiring:** `job_postings` → public applications → `interview_slots` (a
+  posting-level pool the admin fills; a candidate self-books one slot,
+  anonymous and rate-limited the same way `org_apply()` is).
+- **Tasks carry a comment thread** (`task_comments`, visible only to the
+  task's current assigner/assignee/org admin, via `org_can_see_task()`) and
+  drive `notifications` (trigger-fed from task events, comments, and
+  capability grants).
 
 ## Naming
 

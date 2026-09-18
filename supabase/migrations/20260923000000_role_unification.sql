@@ -114,6 +114,8 @@ begin
   end if;
 end $$;
 
+revoke all on function public.org_resync_profile_role(uuid) from public, anon, authenticated;
+
 create or replace function public.org_sync_profile_role()
 returns trigger
 language plpgsql security definer set search_path = public as $$
