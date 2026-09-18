@@ -6,6 +6,7 @@ import { queryClient } from "../lib/query";
 import { OrgErrorBoundary } from "../org/OrgErrorBoundary";
 import { ApplyPage } from "../pages/public/ApplyPage";
 import { HomePage } from "../pages/public/HomePage";
+import { InterviewBookingPage } from "../pages/public/InterviewBookingPage";
 import { JobDetailPage } from "../pages/public/JobDetailPage";
 import { PublicLayout } from "./PublicLayout";
 
@@ -23,6 +24,11 @@ export function PublicJobsApp(): JSX.Element {
                 <Route index element={<HomePage />} />
                 <Route path="jobs/:jobId" element={<JobDetailPage />} />
                 <Route path="jobs/:jobId/apply" element={<ApplyPage />} />
+                {/* No jobId needed here -- the application id already in the
+                    candidate's URL (mailed/texted once they reach the
+                    interview stage) is the whole capability token, same
+                    anonymous posture as org_apply()/ApplyPage. */}
+                <Route path="interview/:applicationId" element={<InterviewBookingPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { Link } from "react-router-dom";
+import { InterviewSlotsDialog } from "../../components/org/InterviewSlotsDialog";
 import { JobPostingDialog } from "../../components/org/JobPostingDialog";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
@@ -43,6 +44,7 @@ export function JobPostingsPage(): JSX.Element {
   const [composing, setComposing] = useState(false);
   const [dated, setDated] = useState<Dated>(null);
   const [date, setDate] = useState("");
+  const [schedulingFor, setSchedulingFor] = useState<JobPostingAdmin | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The nav tab is hidden from the other 499 people, but a typed URL is not a
@@ -228,6 +230,14 @@ export function JobPostingsPage(): JSX.Element {
                       >
                         {t("jobs.close")}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={act.isPending}
+                        onClick={() => setSchedulingFor(job)}
+                      >
+                        {t("interviews.slots_button")}
+                      </Button>
                     </>
                   )}
                 </div>
@@ -284,6 +294,14 @@ export function JobPostingsPage(): JSX.Element {
           </div>
         </div>
       </Dialog>
+
+      {schedulingFor && (
+        <InterviewSlotsDialog
+          postingId={schedulingFor.id}
+          open={schedulingFor !== null}
+          onClose={() => setSchedulingFor(null)}
+        />
+      )}
     </div>
   );
 }

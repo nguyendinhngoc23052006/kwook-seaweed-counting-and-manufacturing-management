@@ -17,6 +17,14 @@ import Login from "../pages/Login";
 import { CamerasPage } from "../pages/org/CamerasPage";
 import { JobApplicationsPage } from "../pages/org/JobApplicationsPage";
 import { JobPostingsPage } from "../pages/org/JobPostingsPage";
+import { NodePage } from "../pages/org/NodePage";
+import { NotificationsPage } from "../pages/org/NotificationsPage";
+import { OrgChartPage } from "../pages/org/OrgChartPage";
+import { PersonPage } from "../pages/org/PersonPage";
+import { ProfilePage } from "../pages/org/ProfilePage";
+import { UnitPage } from "../pages/org/UnitPage";
+import { UnitPeoplePage } from "../pages/org/UnitPeoplePage";
+import { UnitSettingsPage } from "../pages/org/UnitSettingsPage";
 import { WorkPage } from "../pages/org/WorkPage";
 import { OrgErrorBoundary } from "./OrgErrorBoundary";
 
@@ -63,16 +71,30 @@ function OrgRoutes() {
     <>
       <OrgNav rootNodeId={rootNodeId} />
       <Routes>
-        <Route path="/org" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+        <Route path="/org" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
+        <Route path="/org/node" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
+        <Route path="/org/node/:nodeId" element={<NodePage />} />
+        <Route path="/org/node/:nodeId/summary" element={<UnitPage />} />
+        <Route path="/org/node/:nodeId/people" element={<UnitPeoplePage />} />
+        <Route path="/org/node/:nodeId/settings" element={<UnitSettingsPage />} />
+        <Route path="/org/node/:nodeId/person/:personId" element={<PersonPage />} />
+        {/* Node-scoped alias: NodePage/UnitPage/UnitSettingsPage all link here
+            (`/org/node/:id/cameras`, consistent with their own `/people`,
+            `/settings` siblings) -- reusing CamerasPage rather than rewriting
+            those three links to the older `/org/cameras/:id` tab route. */}
+        <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
         <Route
           path="/org/cameras"
           element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />}
         />
         <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
+        <Route path="/org/chart" element={<OrgChartPage />} />
         <Route path="/org/jobs" element={<JobPostingsPage />} />
         <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
         <Route path="/org/work" element={<WorkPage />} />
-        <Route path="*" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+        <Route path="/org/notifications" element={<NotificationsPage />} />
+        <Route path="/org/profile" element={<ProfilePage />} />
+        <Route path="*" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
       </Routes>
     </>
   );
@@ -84,13 +106,17 @@ function OrgNav({ rootNodeId }: { rootNodeId: string }) {
   const { t } = useI18n();
   const location = useLocation();
   const tabs: Array<{ to: string; label: string; match: string }> = [
+    { to: `/org/node/${rootNodeId}`, label: t("nav.tree"), match: "/org/node" },
+    { to: "/org/chart", label: t("nav.chart"), match: "/org/chart" },
     { to: `/org/cameras/${rootNodeId}`, label: t("nav.cameras"), match: "/org/cameras" },
     { to: "/org/jobs", label: t("nav.jobs"), match: "/org/jobs" },
     { to: "/org/work", label: t("nav.work"), match: "/org/work" },
+    { to: "/org/notifications", label: t("nav.notifications"), match: "/org/notifications" },
+    { to: "/org/profile", label: t("nav.me"), match: "/org/profile" },
   ];
   return (
-    <nav className="mb-6 flex items-center justify-between border-b border-hairline">
-      <div className="flex gap-1">
+    <nav className="mb-6 flex flex-wrap items-center justify-between gap-2 border-b border-hairline">
+      <div className="flex flex-wrap gap-1">
         {tabs.map((tab) => (
           <Link
             key={tab.to}
