@@ -1,20 +1,41 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { errorMessage } from "./lib/errorMessage";
 import { loadProfile, type Profile } from "./lib/session";
 import { supabase } from "./lib/supabaseClient";
-import { OrgApp } from "./org/OrgApp";
-import Admin from "./pages/Admin";
-import Capture from "./pages/Capture";
-import Claim from "./pages/Claim";
-import Demo from "./pages/Demo";
 import Login from "./pages/Login";
-import Pair from "./pages/Pair";
-import Scan from "./pages/Scan";
-import Station from "./pages/Station";
-import Stations from "./pages/Stations";
-import Wall from "./pages/Wall";
-import { PublicJobsApp } from "./public/PublicJobsApp";
+
+// Three audiences share this one build (the camera/device console, the org
+// management hub, and the public careers site), and a visitor only ever uses
+// one of them. Eagerly importing all three put every audience's code in a
+// single ~1MB bundle every visitor downloaded regardless of which one they
+// were there for -- lazy() splits each into its own chunk, fetched only when
+// that path is actually reached.
+const OrgApp = lazy(() => import("./org/OrgApp").then((m) => ({ default: m.OrgApp })));
+const PublicJobsApp = lazy(() =>
+  import("./public/PublicJobsApp").then((m) => ({ default: m.PublicJobsApp })),
+);
+const Admin = lazy(() => import("./pages/Admin"));
+const Capture = lazy(() => import("./pages/Capture"));
+const Claim = lazy(() => import("./pages/Claim"));
+const Demo = lazy(() => import("./pages/Demo"));
+const Pair = lazy(() => import("./pages/Pair"));
+const Scan = lazy(() => import("./pages/Scan"));
+const Station = lazy(() => import("./pages/Station"));
+const Stations = lazy(() => import("./pages/Stations"));
+const Wall = lazy(() => import("./pages/Wall"));
+
+// Reused at every Suspense boundary below rather than each site inventing its
+// own -- same visual language as the profile-loading card just past it.
+function PageLoading() {
+  return (
+    <div className="wrap">
+      <div className="card stack">
+        <span className="skeleton">Loading</span>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -32,15 +53,30 @@ export default function App() {
 
   // The demo is camera-only: no database reads, no writes, no device row. It
   // renders before the auth gate so the counter can be shown on any phone.
-  if (pathname === "/demo") return <Demo />;
+  if (pathname === "/demo")
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <Demo />
+      </Suspense>
+    );
   // Pairing renders before the auth gate too: a camera-to-be has no session -
   // it shows a QR and receives one when an admin claims it.
-  if (pathname === "/pair") return <Pair />;
+  if (pathname === "/pair")
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <Pair />
+      </Suspense>
+    );
   // The org-admin section (org chart, capabilities, cameras, hiring, tasks)
   // is a self-contained sibling app: its own providers, its own auth/capability
   // gate against the persons/org_nodes model, entirely separate from the
   // profiles-table gate below that the device/wall/admin pages use.
-  if (pathname.startsWith("/org")) return <OrgApp />;
+  if (pathname.startsWith("/org"))
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <OrgApp />
+      </Suspense>
+    );
 
   // Everything that isn't one of the internal employee/device routes above
   // is the public careers site, including the bare domain root: a stranger
@@ -65,7 +101,12 @@ export default function App() {
     "/login",
   ]);
   const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
-  if (!isStaffPath) return <PublicJobsApp />;
+  if (!isStaffPath)
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <PublicJobsApp />
+      </Suspense>
+    );
 
   if (loading) {
     return (
@@ -118,17 +159,19 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/capture" element={<Capture profile={profile} />} />
-        <Route path="/wall" element={<Wall profile={profile} />} />
-        <Route path="/stations" element={<Stations profile={profile} />} />
-        <Route path="/station/:id" element={<Station profile={profile} />} />
-        <Route path="/admin" element={<Admin profile={profile} />} />
-        <Route path="/claim" element={<Claim profile={profile} />} />
-        <Route path="/scan" element={<Scan profile={profile} />} />
-        <Route path="/demo" element={<Demo />} />
-        <Route path="*" element={<Navigate to={home} replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoading />}>
+        <Routes>
+          <Route path="/capture" element={<Capture profile={profile} />} />
+          <Route path="/wall" element={<Wall profile={profile} />} />
+          <Route path="/stations" element={<Stations profile={profile} />} />
+          <Route path="/station/:id" element={<Station profile={profile} />} />
+          <Route path="/admin" element={<Admin profile={profile} />} />
+          <Route path="/claim" element={<Claim profile={profile} />} />
+          <Route path="/scan" element={<Scan profile={profile} />} />
+          <Route path="/demo" element={<Demo />} />
+          <Route path="*" element={<Navigate to={home} replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

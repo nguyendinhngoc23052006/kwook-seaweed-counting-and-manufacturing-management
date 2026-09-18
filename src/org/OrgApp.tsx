@@ -57,8 +57,16 @@ function useRootNodeId(): { rootNodeId: string | null; error: string | null } {
   return { rootNodeId, error };
 }
 
+// The chart's tree can expand tall and wide enough that its own scrollbar
+// drifts thousands of px below the fold if it just scrolls with the document.
+// Only this route trades the normal document-scrolling shell for a bounded,
+// self-scrolling pane -- everything else keeps scrolling the page like before.
+const BOUNDED_CONTENT_ROUTES = ["/org/chart"];
+
 function OrgRoutes() {
   const { rootNodeId, error } = useRootNodeId();
+  const { pathname } = useLocation();
+  const isBounded = BOUNDED_CONTENT_ROUTES.includes(pathname);
 
   if (error) {
     return <div className="p-6 text-sm text-danger-text">{error}</div>;
@@ -67,35 +75,49 @@ function OrgRoutes() {
     return <div className="p-6 text-sm text-ink-muted">Loading…</div>;
   }
 
+  const routes = (
+    <Routes>
+      <Route path="/org" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
+      <Route path="/org/node" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
+      <Route path="/org/node/:nodeId" element={<NodePage />} />
+      <Route path="/org/node/:nodeId/summary" element={<UnitPage />} />
+      <Route path="/org/node/:nodeId/people" element={<UnitPeoplePage />} />
+      <Route path="/org/node/:nodeId/settings" element={<UnitSettingsPage />} />
+      <Route path="/org/node/:nodeId/person/:personId" element={<PersonPage />} />
+      {/* Node-scoped alias: NodePage/UnitPage/UnitSettingsPage all link here
+          (`/org/node/:id/cameras`, consistent with their own `/people`,
+          `/settings` siblings) -- reusing CamerasPage rather than rewriting
+          those three links to the older `/org/cameras/:id` tab route. */}
+      <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
+      <Route path="/org/cameras" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+      <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
+      <Route path="/org/chart" element={<OrgChartPage />} />
+      <Route path="/org/jobs" element={<JobPostingsPage />} />
+      <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
+      <Route path="/org/work" element={<WorkPage />} />
+      <Route path="/org/notifications" element={<NotificationsPage />} />
+      <Route path="/org/profile" element={<ProfilePage />} />
+      <Route path="*" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
+    </Routes>
+  );
+
+  if (isBounded) {
+    return (
+      <div className="flex h-dvh flex-col overflow-hidden">
+        <div className="shrink-0 px-6 pt-6">
+          <OrgNav rootNodeId={rootNodeId} />
+        </div>
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-6">{routes}</main>
+      </div>
+    );
+  }
+
   return (
     <>
-      <OrgNav rootNodeId={rootNodeId} />
-      <Routes>
-        <Route path="/org" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
-        <Route path="/org/node" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
-        <Route path="/org/node/:nodeId" element={<NodePage />} />
-        <Route path="/org/node/:nodeId/summary" element={<UnitPage />} />
-        <Route path="/org/node/:nodeId/people" element={<UnitPeoplePage />} />
-        <Route path="/org/node/:nodeId/settings" element={<UnitSettingsPage />} />
-        <Route path="/org/node/:nodeId/person/:personId" element={<PersonPage />} />
-        {/* Node-scoped alias: NodePage/UnitPage/UnitSettingsPage all link here
-            (`/org/node/:id/cameras`, consistent with their own `/people`,
-            `/settings` siblings) -- reusing CamerasPage rather than rewriting
-            those three links to the older `/org/cameras/:id` tab route. */}
-        <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
-        <Route
-          path="/org/cameras"
-          element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />}
-        />
-        <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
-        <Route path="/org/chart" element={<OrgChartPage />} />
-        <Route path="/org/jobs" element={<JobPostingsPage />} />
-        <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
-        <Route path="/org/work" element={<WorkPage />} />
-        <Route path="/org/notifications" element={<NotificationsPage />} />
-        <Route path="/org/profile" element={<ProfilePage />} />
-        <Route path="*" element={<Navigate to={`/org/node/${rootNodeId}`} replace />} />
-      </Routes>
+      <div className="px-6 pt-6">
+        <OrgNav rootNodeId={rootNodeId} />
+      </div>
+      <div className="px-6 pb-6">{routes}</div>
     </>
   );
 }
@@ -168,7 +190,7 @@ export function OrgApp() {
       ) : (
         <QueryClientProvider client={queryClient}>
           <I18nProvider>
-            <div className="min-h-screen bg-surface-sunken p-6">
+            <div className="min-h-screen bg-surface-sunken">
               <OrgRouter>
                 <OrgRoutes />
               </OrgRouter>
