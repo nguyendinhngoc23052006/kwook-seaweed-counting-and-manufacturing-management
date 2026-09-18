@@ -187,6 +187,53 @@ export async function setNodeNature(id: string, natureKey: string | null): Promi
   return data as OrgNode;
 }
 
+// Reparenting is reserved to org_admin() by org_guard_nodes (8.8) -- a real
+// parent_id change for anyone else raises a Postgres error from the trigger,
+// which is left to surface as-is rather than pre-validated here.
+export async function moveNode(nodeId: string, newParentId: string): Promise<OrgNode> {
+  if (!nodeId || !newParentId) throw new Error("node and new parent required");
+  if (nodeId === newParentId) throw new Error("a node cannot be its own parent");
+  const client = supabase();
+  const { data, error } = await client
+    .from("org_nodes")
+    .update({ parent_id: newParentId })
+    .eq("id", nodeId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as OrgNode;
+}
+
+export async function setNodeActive(id: string, active: boolean): Promise<OrgNode> {
+  const client = supabase();
+  const { data, error } = await client
+    .from("org_nodes")
+    .update({ active })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as OrgNode;
+}
+
+export interface NodeHistoryEntry {
+  at: string;
+  actor_person_id: string | null;
+  action: "insert" | "update";
+  before_json: unknown;
+  after_json: unknown;
+}
+
+// Mirrors listCapabilityHistory()'s defensive shape (src/services/capabilities.ts):
+// org_node_history() itself returns zero rows for an unauthorized caller rather
+// than raising, so there is no error path to distinguish here.
+export async function getNodeHistory(nodeId: string): Promise<NodeHistoryEntry[]> {
+  const client = supabase();
+  const { data, error } = await client.rpc("org_node_history", { p_node: nodeId });
+  if (error) throw error;
+  return Array.isArray(data) ? (data as NodeHistoryEntry[]) : [];
+}
+
 // --- Pure walks over the one snapshot -----------------------------------
 // The tree is arbitrarily deep and arrives whole, so every screen derives what
 // it needs from that array instead of asking the database again per level.
@@ -221,6 +268,21 @@ export function childrenOf(children: Map<string, OrgTreeNode[]>, nodeId: string)
   return children.get(nodeId) ?? [];
 }
 
+// Every id under nodeId (not including nodeId itself), one BFS over the same
+// index childrenOf() already reads. org_guard_nodes refuses a cycle regardless,
+// this just keeps a doomed reparent choice off the picker in the first place.
+export function descendantIds(children: Map<string, OrgTreeNode[]>, nodeId: string): string[] {
+  const out: string[] = [];
+  const queue = [...childrenOf(children, nodeId)];
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) continue;
+    out.push(next.id);
+    queue.push(...childrenOf(children, next.id));
+  }
+  return out;
+}
+
 // Root first, the node itself last. Depth-capped like the SQL walks: the
 // triggers refuse a cycle, but a breadcrumb that never ends is a frozen tab
 // rather than an error message.
@@ -229,7 +291,7 @@ export function breadcrumbOf(nodes: OrgTreeNode[], nodeId: string): OrgTreeNode[
   const trail: OrgTreeNode[] = [];
   let current = byId.get(nodeId);
   let depth = 0;
-  while (current && depth < 64) {
+  while (current && depth < 100000) {
     trail.unshift(current);
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
     depth += 1;

@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { type JSX, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AddFieldWorkerDialog } from "../../components/org/AddFieldWorkerDialog";
 import { AssignSeatDialog } from "../../components/org/AssignSeatDialog";
 import { CreatePositionDialog } from "../../components/org/CreatePositionDialog";
+import { MoveNodeDialog } from "../../components/org/MoveNodeDialog";
 import { NodeCapabilityPanel } from "../../components/org/NodeCapabilityPanel";
 import { TouchSelect } from "../../components/org/TouchSelect";
 import { Alert } from "../../components/ui/Alert";
@@ -22,12 +24,14 @@ import {
   childrenOf,
   createChildNode,
   findNode,
+  getNodeHistory,
   getOrgTree,
   indexChildren,
   listNodeNatures,
   type OrgTreeNode,
   type OrgTreeSeat,
   rootNode,
+  setNodeActive,
   setNodeNature,
 } from "../../services/nodes";
 import { listRanks } from "../../services/positions";
@@ -67,6 +71,122 @@ function seatsByRank(node: OrgTreeNode): OrgTreeSeat[] {
   );
 }
 
+function historyStamp(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? iso : format(parsed, "dd/MM/yyyy HH:mm");
+}
+
+function asRow(v: unknown): Record<string, unknown> {
+  return v !== null && typeof v === "object" ? (v as Record<string, unknown>) : {};
+}
+
+type TFn = ReturnType<typeof useI18n>["t"];
+
+// org_node_history (8.11) carries the raw before/after column snapshot, not a
+// diff -- a viewer reading raw JSON is exactly the "unprofessional" complaint
+// this feature exists to fix, so every row here is turned into one plain
+// sentence naming only the columns a human would ask about.
+function summarizeNodeChange(
+  before: unknown,
+  after: unknown,
+  natures: { key: string; name_vi: string; name_en: string }[],
+  locale: string,
+  t: TFn,
+): string | null {
+  const b = asRow(before);
+  const a = asRow(after);
+  const parts: string[] = [];
+
+  if (a.name !== b.name || a.name_en !== b.name_en) {
+    const label =
+      locale === "en"
+        ? (a.name_en as string | undefined) || (a.name as string | undefined)
+        : (a.name as string | undefined);
+    if (label) parts.push(t("node_history.renamed", { name: label }));
+  }
+  if (a.nature_key !== b.nature_key) {
+    const key = (a.nature_key as string | null) ?? null;
+    parts.push(
+      key
+        ? t("node_history.type_set", { nature: natureLabelFor(natures, key, locale) ?? key })
+        : t("node_history.type_cleared"),
+    );
+  }
+  if (a.active !== b.active) {
+    parts.push(a.active ? t("node_history.reactivated") : t("node_history.deactivated"));
+  }
+  if (a.parent_id !== b.parent_id) {
+    parts.push(t("node_history.moved"));
+  }
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+// Collapsed by default and its query only fires once expanded -- same shape as
+// NodeCapabilityPanel's CapabilityHistoryDisclosure, one tier up as its own
+// Section rather than a per-row disclosure.
+function NodeHistorySection(props: {
+  node: OrgTreeNode;
+  natures: { key: string; name_vi: string; name_en: string }[];
+  locale: string;
+  t: TFn;
+}): JSX.Element {
+  const { node, natures, locale, t } = props;
+  const [open, setOpen] = useState(false);
+
+  const history = useQuery({
+    queryKey: ["org", "node-history", node.id],
+    queryFn: () => getNodeHistory(node.id),
+    enabled: open,
+  });
+
+  return (
+    <Section
+      title={t("node_history.title")}
+      description={t("node_history.description")}
+      action={
+        <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? t("node_history.hide") : t("node_history.show")}
+        </Button>
+      }
+    >
+      {!open ? (
+        <p className="py-2 text-sm text-ink-muted">{t("node_history.collapsed_hint")}</p>
+      ) : history.isLoading ? (
+        <ListSkeleton rows={3} label={t("node_history.loading")} />
+      ) : history.isError ? (
+        <ErrorState
+          message={errorMessage(history.error, t("node_history.load_failed"))}
+          action={
+            <Button size="sm" onClick={() => history.refetch()}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
+      ) : (history.data ?? []).length === 0 ? (
+        <p className="py-2 text-sm text-ink-muted">{t("node_history.empty")}</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {(history.data ?? []).map((entry, index) => {
+            const actionKey =
+              entry.action === "insert" ? "node_history.created" : "node_history.updated";
+            const summary =
+              entry.action === "update"
+                ? summarizeNodeChange(entry.before_json, entry.after_json, natures, locale, t)
+                : null;
+            return (
+              <li key={`${entry.at}-${index}`} className="py-2 text-sm text-ink">
+                <span className="text-ink-muted">{historyStamp(entry.at)}</span> ·{" "}
+                <span>{t(actionKey)}</span>
+                {summary && <span className="text-ink-muted"> — {summary}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
 // The tree browser. One node at a time — its children, its seats and the people
 // in them — with a breadcrumb back to the root, because the tree grows deeper
 // as well as wider and a back button is not a position.
@@ -88,6 +208,8 @@ export function NodePage(): JSX.Element {
   const [addFieldWorkerOpen, setAddFieldWorkerOpen] = useState(false);
   const [createPositionOpen, setCreatePositionOpen] = useState(false);
   const [assignSeat, setAssignSeat] = useState<OrgTreeSeat | null>(null);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const tree = useQuery({ queryKey: ["org", "tree"], queryFn: getOrgTree });
@@ -130,6 +252,16 @@ export function NodePage(): JSX.Element {
     mutationFn: (target: string) => setNodeNature(target, natureDraft || null),
     onSuccess: () => {
       setNatureDraft("");
+      setError(null);
+      invalidate();
+    },
+    onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
+  });
+
+  const setActive = useMutation({
+    mutationFn: (input: { id: string; active: boolean }) => setNodeActive(input.id, input.active),
+    onSuccess: () => {
+      setConfirmDeactivate(false);
       setError(null);
       invalidate();
     },
@@ -248,6 +380,49 @@ export function NodePage(): JSX.Element {
         >
           {t("nav.work")}
         </Link>
+
+        {myReach?.isAdmin === true && (
+          <Button size="sm" variant="secondary" onClick={() => setMoveOpen(true)}>
+            {t("orgtree.move")}
+          </Button>
+        )}
+
+        {canAddChild &&
+          (node.active ? (
+            confirmDeactivate ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={setActive.isPending}
+                  onClick={() => setActive.mutate({ id: node.id, active: false })}
+                >
+                  {setActive.isPending ? t("common.loading") : t("orgtree.deactivate_confirm")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={setActive.isPending}
+                  onClick={() => setConfirmDeactivate(false)}
+                >
+                  {t("common.cancel")}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setConfirmDeactivate(true)}>
+                {t("orgtree.deactivate")}
+              </Button>
+            )
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={setActive.isPending}
+              onClick={() => setActive.mutate({ id: node.id, active: true })}
+            >
+              {setActive.isPending ? t("common.loading") : t("orgtree.reactivate")}
+            </Button>
+          ))}
       </div>
 
       {error && <Alert variant="error">{error}</Alert>}
@@ -481,6 +656,20 @@ export function NodePage(): JSX.Element {
         canConfigure={canConfigure}
       />
 
+      {canAddChild && (
+        <NodeHistorySection node={node} natures={natures.data ?? []} locale={locale} t={t} />
+      )}
+
+      {moveOpen && (
+        <MoveNodeDialog
+          open={true}
+          onClose={() => setMoveOpen(false)}
+          onMoved={invalidate}
+          node={node}
+          nodes={nodes}
+        />
+      )}
+
       {addFieldWorkerOpen && (
         <AddFieldWorkerDialog
           open={addFieldWorkerOpen}
@@ -500,14 +689,12 @@ export function NodePage(): JSX.Element {
           open={createPositionOpen}
           onClose={() => setCreatePositionOpen(false)}
           onCreated={invalidate}
-          onAssign={(seat) => {
-            setCreatePositionOpen(false);
-            setAssignSeat(seat);
-          }}
           node={node}
           nodes={nodes}
           ranks={ranks.data ?? []}
           isAdmin={myReach?.isAdmin === true}
+          canMaintainProfile={canMaintainProfile}
+          canMaintainBank={canMaintainBank}
         />
       )}
 

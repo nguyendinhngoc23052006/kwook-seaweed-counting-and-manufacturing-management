@@ -1,29 +1,21 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
 import { nodeLabel } from "../../lib/orgLabels";
 import type { OrgTreeNode, OrgTreeSeat } from "../../services/nodes";
-import {
-  applyOptionalPersonDetails,
-  createPersonForSeat,
-  listVisiblePersons,
-} from "../../services/people";
+import { applyOptionalPersonDetails, createPersonForSeat } from "../../services/people";
 import { seatPerson, vacatePosition } from "../../services/positions";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
-import { Empty, ErrorState } from "../ui/EmptyState";
-import { Label } from "../ui/Input";
-import { ListSkeleton } from "../ui/Skeleton";
 import {
   bankPatchOf,
   emptyPersonDraft,
-  PersonDetailsFields,
   type PersonDraft,
   profilePatchOf,
 } from "./PersonDetailsFields";
-import { TouchSelect } from "./TouchSelect";
+import { type OccupantMode, SeatOccupantFields } from "./SeatOccupantFields";
 
 interface Props {
   open: boolean;
@@ -36,8 +28,6 @@ interface Props {
   myPersonId: string | null;
 }
 
-type Mode = "existing" | "new";
-
 // Fills an empty seat, replaces its holder, or vacates it. Every one of those
 // is one appended row on the holder timeline — nothing is overwritten, so last
 // September stays answerable.
@@ -46,17 +36,11 @@ export function AssignSeatDialog(props: Props): JSX.Element | null {
     props;
   const { t, locale } = useI18n();
 
-  const [mode, setMode] = useState<Mode>("existing");
+  const [mode, setMode] = useState<OccupantMode>("existing");
   const [personId, setPersonId] = useState("");
   const [draft, setDraft] = useState<PersonDraft>(emptyPersonDraft);
   const [confirmVacate, setConfirmVacate] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const persons = useQuery({
-    queryKey: ["org", "persons"],
-    queryFn: listVisiblePersons,
-    enabled: open && mode === "existing",
-  });
 
   const reset = () => {
     setMode("existing");
@@ -131,13 +115,6 @@ export function AssignSeatDialog(props: Props): JSX.Element | null {
 
   if (!open) return null;
 
-  // The database refuses self-seating outright, and a person already seated
-  // outside the caller's branch too — so neither is offered here.
-  const candidates = (persons.data ?? []).filter(
-    (person) =>
-      person.status !== "departed" && person.id !== myPersonId && person.id !== seat.person_id,
-  );
-
   return (
     <Dialog
       open={open}
@@ -209,69 +186,22 @@ export function AssignSeatDialog(props: Props): JSX.Element | null {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={mode === "existing" ? "primary" : "secondary"}
-            onClick={() => setMode("existing")}
-            disabled={busy}
-          >
-            {t("assign.mode_existing")}
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "new" ? "primary" : "secondary"}
-            onClick={() => setMode("new")}
-            disabled={busy}
-          >
-            {t("assign.mode_new")}
-          </Button>
-        </div>
-
-        {mode === "existing" ? (
-          persons.isLoading ? (
-            <ListSkeleton rows={2} label={t("assign.loading_people")} />
-          ) : persons.isError ? (
-            <ErrorState
-              message={errorMessage(persons.error, t("assign.people_failed"))}
-              action={
-                <Button size="sm" onClick={() => persons.refetch()}>
-                  {t("common.retry")}
-                </Button>
-              }
-            />
-          ) : candidates.length === 0 ? (
-            <Empty title={t("assign.no_candidates")} description={t("assign.no_candidates_hint")} />
-          ) : (
-            <div>
-              <Label htmlFor="assign-person">{t("assign.person")}</Label>
-              <TouchSelect
-                id="assign-person"
-                value={personId}
-                onChange={(value) => setPersonId(value)}
-                disabled={busy}
-                searchable={candidates.length >= 6}
-                ariaLabel={t("assign.person")}
-                options={[
-                  { value: "", label: t("assign.pick_person") },
-                  ...candidates.map((person) => ({
-                    value: person.id,
-                    label: `${person.full_name} · ${person.employee_code}`,
-                  })),
-                ]}
-              />
-            </div>
-          )
-        ) : (
-          <PersonDetailsFields
-            draft={draft}
-            onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
-            canMaintainProfile={canMaintainProfile}
-            canMaintainBank={canMaintainBank}
-            disabled={busy}
-            idPrefix="assign-new"
-          />
-        )}
+        {/* The database refuses self-seating outright, and a person already
+            seated elsewhere too — so neither is offered here. */}
+        <SeatOccupantFields
+          mode={mode}
+          onModeChange={setMode}
+          allowNone={false}
+          personId={personId}
+          onPersonIdChange={setPersonId}
+          excludePersonIds={[myPersonId, seat.person_id].filter((id): id is string => Boolean(id))}
+          draft={draft}
+          onDraftChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+          canMaintainProfile={canMaintainProfile}
+          canMaintainBank={canMaintainBank}
+          disabled={busy}
+          idPrefix="assign"
+        />
       </div>
     </Dialog>
   );

@@ -16,8 +16,9 @@ import {
 } from "../../services/nodes";
 
 // Same depth cap the SQL walks and breadcrumbOf() use: the triggers refuse a
-// cycle, but a chart that never stops drawing is a frozen tab.
-const MAX_DEPTH = 64;
+// cycle unconditionally, so this is pure insurance against a hypothetical
+// direct-SQL data corruption bypassing that guard -- not a real org-size limit.
+const MAX_DEPTH = 100000;
 
 // How deep the chart opens on arrival. The layout is a nested flex tree, so a
 // subtree's width is the sum of its leaves'. Kwook has one location today, so

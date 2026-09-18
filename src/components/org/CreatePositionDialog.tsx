@@ -5,37 +5,70 @@ import { useI18n } from "../../lib/i18n";
 import { nodeLabel, rankLabel } from "../../lib/orgLabels";
 import type { OrgTreeNode, OrgTreeSeat } from "../../services/nodes";
 import { hasRootSeat, managerSeatChoices } from "../../services/nodes";
+import {
+  applyOptionalPersonDetails,
+  createPersonForSeat,
+  type OptionalPersonWrite,
+} from "../../services/people";
 import type { Rank } from "../../services/positions";
-import { createPosition } from "../../services/positions";
+import { createPosition, seatPerson } from "../../services/positions";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
+import {
+  bankPatchOf,
+  emptyPersonDraft,
+  type PersonDraft,
+  profilePatchOf,
+} from "./PersonDetailsFields";
+import { type OccupantMode, SeatOccupantFields } from "./SeatOccupantFields";
 import { TouchSelect } from "./TouchSelect";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
-  onAssign: (seat: OrgTreeSeat) => void;
   node: OrgTreeNode;
   nodes: OrgTreeNode[];
   ranks: Rank[];
   isAdmin: boolean;
+  canMaintainProfile: boolean;
+  canMaintainBank: boolean;
 }
+
+// The seat exists the moment createPosition resolves, whatever happens next —
+// so a failure seating its occupant is shown next to a seat that is already
+// real, never folded back into "creating the position failed".
+type SeatResult =
+  | { kind: "not_seated"; error: string }
+  | { kind: "seated_partial"; name: string; code: string; failed: OptionalPersonWrite[] };
 
 // THE OFFICE DOORWAY. The seat is created first — "Head of Marketing" exists,
 // and stands empty until an account or a person is assigned to it. Underneath
 // it is the same two records as the field doorway; only this door differs.
 export function CreatePositionDialog(props: Props): JSX.Element | null {
-  const { open, onClose, onCreated, onAssign, node, nodes, ranks, isAdmin } = props;
+  const {
+    open,
+    onClose,
+    onCreated,
+    node,
+    nodes,
+    ranks,
+    isAdmin,
+    canMaintainProfile,
+    canMaintainBank,
+  } = props;
   const { t, locale } = useI18n();
 
   const [title, setTitle] = useState("");
   const [titleEn, setTitleEn] = useState("");
   const [rankKey, setRankKey] = useState("");
   const [managerPositionId, setManagerPositionId] = useState("");
-  const [createdPositionId, setCreatedPositionId] = useState<string | null>(null);
+  const [occupantMode, setOccupantMode] = useState<OccupantMode>("none");
+  const [occupantPersonId, setOccupantPersonId] = useState("");
+  const [occupantDraft, setOccupantDraft] = useState<PersonDraft>(emptyPersonDraft);
+  const [seatResult, setSeatResult] = useState<SeatResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const choices: { seat: OrgTreeSeat; node: OrgTreeNode }[] = managerSeatChoices(nodes, node.id);
@@ -52,7 +85,10 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
     setTitleEn("");
     setRankKey("");
     setManagerPositionId("");
-    setCreatedPositionId(null);
+    setOccupantMode("none");
+    setOccupantPersonId("");
+    setOccupantDraft(emptyPersonDraft);
+    setSeatResult(null);
     setError(null);
   };
 
@@ -61,24 +97,61 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
     onClose();
   };
 
+  // onCreated() already ran when the position landed, so the tree behind the
+  // dialog is fresh; closing only clears the form.
   const finish = () => {
     reset();
-    onCreated();
     onClose();
   };
 
   const create = useMutation({
-    mutationFn: () =>
-      createPosition({
+    mutationFn: async () => {
+      const position = await createPosition({
         nodeId: node.id,
         rankId: selectedRank?.id ?? "",
         title,
         titleEn,
         reportsToPositionId: managerPositionId || null,
-      }),
-    onSuccess: (position) => {
+      });
+      let seat: SeatResult | null = null;
+      try {
+        if (occupantMode === "existing" && occupantPersonId) {
+          await seatPerson({ positionId: position.id, personId: occupantPersonId });
+        } else if (occupantMode === "new" && occupantDraft.fullName.trim()) {
+          const created = await createPersonForSeat({
+            positionId: position.id,
+            fullName: occupantDraft.fullName,
+            phone: occupantDraft.phone,
+            email: occupantDraft.email,
+            hireDate: occupantDraft.hireDate || null,
+          });
+          const failed = await applyOptionalPersonDetails(
+            created.person_id,
+            canMaintainProfile ? profilePatchOf(occupantDraft) : {},
+            canMaintainBank ? bankPatchOf(occupantDraft) : {},
+          );
+          if (failed.length > 0) {
+            seat = {
+              kind: "seated_partial",
+              name: occupantDraft.fullName.trim(),
+              code: created.employee_code,
+              failed,
+            };
+          }
+        }
+      } catch (e) {
+        seat = { kind: "not_seated", error: errorMessage(e, t("orgtree.write_failed")) };
+      }
+      return seat;
+    },
+    onSuccess: (seat) => {
       setError(null);
-      setCreatedPositionId(position.id);
+      onCreated();
+      if (seat) {
+        setSeatResult(seat);
+      } else {
+        finish();
+      }
     },
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
@@ -87,48 +160,45 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
     title.trim() !== "" &&
     rankValue !== "" &&
     (managerPositionId !== "" || rootSeatFree) &&
+    (occupantMode !== "existing" || occupantPersonId !== "") &&
+    (occupantMode !== "new" || occupantDraft.fullName.trim() !== "") &&
     !create.isPending;
 
   if (!open) return null;
 
-  if (createdPositionId) {
-    const positionId = createdPositionId;
+  if (seatResult) {
     return (
       <Dialog
         open={open}
         onClose={finish}
         title={t("position.created_title")}
-        footer={
-          <>
-            <Button variant="ghost" onClick={finish}>
-              {t("position.leave_empty")}
-            </Button>
-            <Button
-              onClick={() => {
-                // The seat is handed over whole rather than by id: the tree
-                // query has not refetched yet, so looking it up there would
-                // open nothing and read as a dead button.
-                const seat: OrgTreeSeat = {
-                  position_id: positionId,
-                  title: title.trim(),
-                  rank_key: selectedRank?.key ?? "",
-                  rank_ordinal: selectedRank?.ordinal ?? 0,
-                  reports_to: managerPositionId || null,
-                  person_id: null,
-                  person_name: null,
-                  employee_code: null,
-                };
-                reset();
-                onCreated();
-                onAssign(seat);
-              }}
-            >
-              {t("position.assign_now")}
-            </Button>
-          </>
-        }
+        footer={<Button onClick={finish}>{t("common.close")}</Button>}
       >
-        <Alert variant="success">{t("position.created_body", { title: title.trim() })}</Alert>
+        <div className="space-y-3">
+          {seatResult.kind === "not_seated" ? (
+            <>
+              <Alert variant="success">{t("position.created_body", { title: title.trim() })}</Alert>
+              <Alert variant="warning">
+                {t("position.seat_not_assigned", { error: seatResult.error })}
+              </Alert>
+            </>
+          ) : (
+            <>
+              <Alert variant="success">
+                {t("field_worker.created_body", {
+                  name: seatResult.name,
+                  code: seatResult.code,
+                })}
+              </Alert>
+              {seatResult.failed.includes("profile") && (
+                <Alert variant="warning">{t("field_worker.profile_not_saved")}</Alert>
+              )}
+              {seatResult.failed.includes("bank") && (
+                <Alert variant="warning">{t("field_worker.bank_not_saved")}</Alert>
+              )}
+            </>
+          )}
+        </div>
       </Dialog>
     );
   }
@@ -222,6 +292,23 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
               {t("seat.rank_filtered", { title: manager.seat.title })}
             </p>
           )}
+        </div>
+
+        <div className="border-t border-hairline pt-4">
+          <SeatOccupantFields
+            mode={occupantMode}
+            onModeChange={setOccupantMode}
+            allowNone={true}
+            personId={occupantPersonId}
+            onPersonIdChange={setOccupantPersonId}
+            excludePersonIds={[]}
+            draft={occupantDraft}
+            onDraftChange={(patch) => setOccupantDraft((prev) => ({ ...prev, ...patch }))}
+            canMaintainProfile={canMaintainProfile}
+            canMaintainBank={canMaintainBank}
+            disabled={create.isPending}
+            idPrefix="position-occupant"
+          />
         </div>
       </div>
     </Dialog>
