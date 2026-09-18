@@ -452,3 +452,19 @@ verify_jwt = true
 [functions.stream-signal]
 enabled = true
 verify_jwt = true
+
+# Creates the real Supabase Auth account behind a camera device -- something
+# only the Admin API can do, never plain RLS. The platform verifies the
+# caller's JWT; the function additionally re-checks the caller holds
+# manage_camera_devices before it ever switches to the service role.
+[functions.create-camera-device]
+enabled = true
+verify_jwt = true
+
+# Scores a CV against its job posting with Gemini. Nothing calls this from the
+# browser -- it is woken by a Database Webhook on applications INSERT
+# (dashboard: Database -> Webhooks), which sends its own bearer token, so the
+# platform still has a JWT to verify even though no end user is involved.
+[functions.score-application]
+enabled = true
+verify_jwt = true
