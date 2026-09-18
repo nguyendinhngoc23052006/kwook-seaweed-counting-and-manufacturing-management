@@ -55,28 +55,38 @@ set check_function_bodies = off;
 -- =====================================================================================
 -- 0. PRECONDITION -- checked FIRST, before a single object is created
 --
--- Section 12.2 seeds the sysadmin from an auth.users row matched by email, and
--- without that row nothing here can ever be bootstrapped: no seat can be
--- created, no grant can be written, and the whole model is inert until another
--- migration repairs it. So the check is here rather than at the end, and the
--- reason is specific to how this file reaches production. `supabase db push`
--- runs each migration file in its own transaction, but that is a property of
--- the tool, not of SQL, and if it ever does not hold then a check at the
--- bottom aborts with every table already committed. A check at the top cannot
--- leave anything behind under either behaviour: the file stops at its second
--- statement having created nothing.
+-- Section 12.2 seeds the sysadmin from an auth.users row matched by email. On
+-- a persistent project (staging, production) that row already exists -- the
+-- owner is a real, already-signed-up user of the live app -- so this always
+-- resolves immediately there and the seed lands in the same statement.
 --
--- If this fires, nothing has changed. Sign up with the owner's email in this
--- Supabase project first, then re-run.
+-- On an EPHEMERAL Supabase preview branch (one per PR, thrown away when the
+-- PR closes) that row can never exist: nobody signs up on a database that
+-- lives for the lifetime of a pull request. This migration still has to
+-- apply cleanly there, because `supabase for GitHub` runs Migrations before
+-- Seeding on every branch, and this repo's `canary` check depends on
+-- `seed.sql` running to smoke-test sign-in and RLS. A hard abort here would
+-- take down Seeding -- and therefore `canary` -- on every future PR forever,
+-- not just the one that introduces this file.
+--
+-- So this is a loud, non-fatal warning rather than an exception: everything
+-- else in this file still gets created, and section 12.2's own insert
+-- naturally seeds zero sysadmin rows when there is no match (its `where`
+-- clause, not this check, is what actually guards it). If this ever prints
+-- on a persistent project, the model is genuinely un-bootstrapped: sign up
+-- with the owner's email there, then land a follow-up migration (fix
+-- forward -- this file has already been applied and does not get replayed)
+-- that inserts the same section 12.2 row directly.
 -- =====================================================================================
 do $$
 begin
   if not exists (select 1 from auth.users u
                   where u.email = 'nguyendinhngoc23052006@gmail.com') then
-    raise exception 'org foundation precondition failed: the owner account '
+    raise warning 'org foundation: the owner account '
       '(nguyendinhngoc23052006@gmail.com) has not signed up in this Supabase project yet, '
-      'so there is no account to seed as sysadmin. Nothing has been created. Sign up with '
-      'that email first, then re-run this migration.';
+      'so section 12.2 will seed no sysadmin row. Expected and harmless on an ephemeral '
+      'preview branch. On a persistent project, sign up with that email, then land a '
+      'follow-up migration to seed org_sysadmins directly.';
   end if;
 end $$;
 
@@ -1964,10 +1974,12 @@ begin
   if (select count(*) from public.org_nodes where parent_id is null) <> 1 then
     raise exception 'org foundation self-check failed: the tree does not have exactly one root node';
   end if;
-  -- Re-asserted here as well as in Section 0: Section 0 proves a source row EXISTS,
-  -- this proves the seed actually landed one.
+  -- Non-fatal, matching Section 0: on an ephemeral preview branch the owner never
+  -- signs up, so this is expected there. On a persistent project it means the
+  -- model needs a follow-up seed once the owner signs up (fix forward).
   if not exists (select 1 from public.org_sysadmins where active) then
-    raise exception 'org foundation self-check failed: the sysadmin seed matched nothing. '
-      'Sign up with the owner''s email in this Supabase project, then re-run this migration.';
+    raise warning 'org foundation: the sysadmin seed matched nothing (no sysadmin exists yet). '
+      'Expected and harmless on an ephemeral preview branch. On a persistent project, sign up '
+      'with the owner''s email, then land a follow-up migration to seed org_sysadmins directly.';
   end if;
 end $$;
