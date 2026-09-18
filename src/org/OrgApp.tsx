@@ -1,12 +1,22 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Navigate, BrowserRouter as OrgRouter, Route, Routes } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  BrowserRouter as OrgRouter,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { errorMessage } from "../lib/errorMessage";
-import { I18nProvider } from "../lib/i18n";
+import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
 import { supabase } from "../lib/supabaseClient";
 import Login from "../pages/Login";
 import { CamerasPage } from "../pages/org/CamerasPage";
+import { JobApplicationsPage } from "../pages/org/JobApplicationsPage";
+import { JobPostingsPage } from "../pages/org/JobPostingsPage";
+import { WorkPage } from "../pages/org/WorkPage";
 import { OrgErrorBoundary } from "./OrgErrorBoundary";
 
 // The org-admin section (capability-gated cameras today; org chart, hiring,
@@ -44,12 +54,50 @@ function OrgRoutes() {
   }
 
   return (
-    <Routes>
-      <Route path="/org" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
-      <Route path="/org/cameras" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
-      <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
-      <Route path="*" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
-    </Routes>
+    <>
+      <OrgNav rootNodeId={rootNodeId} />
+      <Routes>
+        <Route path="/org" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+        <Route
+          path="/org/cameras"
+          element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />}
+        />
+        <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
+        <Route path="/org/jobs" element={<JobPostingsPage />} />
+        <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
+        <Route path="/org/work" element={<WorkPage />} />
+        <Route path="*" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+      </Routes>
+    </>
+  );
+}
+
+// Three sections now exist where there was one -- a reader needs a way to move
+// between them that isn't guessing at the URL bar.
+function OrgNav({ rootNodeId }: { rootNodeId: string }) {
+  const { t } = useI18n();
+  const location = useLocation();
+  const tabs: Array<{ to: string; label: string; match: string }> = [
+    { to: `/org/cameras/${rootNodeId}`, label: t("nav.cameras"), match: "/org/cameras" },
+    { to: "/org/jobs", label: t("nav.jobs"), match: "/org/jobs" },
+    { to: "/org/work", label: t("nav.work"), match: "/org/work" },
+  ];
+  return (
+    <nav className="mb-6 flex gap-1 border-b border-hairline">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.to}
+          to={tab.to}
+          className={`min-h-11 rounded-t-lg px-4 py-2 text-sm font-medium ${
+            location.pathname.startsWith(tab.match)
+              ? "border-b-2 border-accent text-accent-text"
+              : "text-ink-muted hover:text-ink"
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 

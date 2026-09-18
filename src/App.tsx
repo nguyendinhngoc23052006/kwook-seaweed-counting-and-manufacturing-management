@@ -14,6 +14,7 @@ import Scan from "./pages/Scan";
 import Station from "./pages/Station";
 import Stations from "./pages/Stations";
 import Wall from "./pages/Wall";
+import { PublicJobsApp } from "./public/PublicJobsApp";
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -33,6 +34,9 @@ export default function App() {
   // Pairing renders before the auth gate too: a camera-to-be has no session -
   // it shows a QR and receives one when an admin claims it.
   if (window.location.pathname === "/pair") return <Pair />;
+  // The public careers site (job board, application form) has no account at
+  // all -- it renders before the auth gate too, same reason as /pair.
+  if (window.location.pathname.startsWith("/careers")) return <PublicJobsApp />;
   // The org-admin section (org chart, capabilities, cameras, hiring, tasks)
   // is a self-contained sibling app: its own providers, its own auth/capability
   // gate against the persons/org_nodes model, entirely separate from the
