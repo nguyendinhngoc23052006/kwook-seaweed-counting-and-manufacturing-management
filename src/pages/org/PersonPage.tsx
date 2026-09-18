@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FaceEnrollmentPanel } from "../../components/org/FaceEnrollmentPanel";
 import {
   bankPatchOf,
   emptyPersonDraft,
@@ -90,6 +91,10 @@ export function PersonPage(): JSX.Element {
   const canMaintainBank = capabilityReaches(myReach.data, "maintain_bank_details", nodeId ?? "");
   const isSelf = myReach.data?.personId === personId;
   const canEditProfile = canMaintainProfile || isSelf;
+  // enroll_own_face is a privilege, not a default: a coworker with camera
+  // access must not be able to enrol someone else's face as their own.
+  const canSelfEnroll =
+    myReach.data?.isAdmin === true || (myReach.data?.byKey.enroll_own_face?.length ?? 0) > 0;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -192,6 +197,11 @@ export function PersonPage(): JSX.Element {
           )}
         </div>
       </Section>
+
+      <FaceEnrollmentPanel
+        personId={personId}
+        canEnroll={canMaintainProfile || (isSelf && canSelfEnroll)}
+      />
     </div>
   );
 }

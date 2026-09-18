@@ -17,7 +17,9 @@ export type CapabilityKey =
   | "maintain_person_profile"
   | "maintain_bank_details"
   | "manage_camera_devices"
-  | "view_camera_data";
+  | "view_camera_data"
+  | "view_attendance_below"
+  | "enroll_own_face";
 
 export interface CapabilityType {
   key: CapabilityKey;
@@ -201,6 +203,8 @@ const REACH_QUERIES: { key: CapabilityKey; strict: boolean }[] = [
   { key: "maintain_bank_details", strict: false },
   { key: "manage_camera_devices", strict: false },
   { key: "view_camera_data", strict: false },
+  { key: "view_attendance_below", strict: false },
+  { key: "enroll_own_face", strict: false },
 ];
 
 export async function getMyCapabilityReach(): Promise<CapabilityReach> {

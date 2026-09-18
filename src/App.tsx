@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { errorMessage } from "./lib/errorMessage";
-import { loadProfile, type Profile } from "./lib/session";
+import { type DoorCamera, loadDoorCamera, loadProfile, type Profile } from "./lib/session";
 import { supabase } from "./lib/supabaseClient";
 import Login from "./pages/Login";
 
@@ -16,6 +16,7 @@ const PublicJobsApp = lazy(() =>
   import("./public/PublicJobsApp").then((m) => ({ default: m.PublicJobsApp })),
 );
 const Admin = lazy(() => import("./pages/Admin"));
+const AttendanceCamera = lazy(() => import("./pages/AttendanceCamera"));
 const Capture = lazy(() => import("./pages/Capture"));
 const Claim = lazy(() => import("./pages/Claim"));
 const Demo = lazy(() => import("./pages/Demo"));
@@ -39,14 +40,24 @@ function PageLoading() {
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  // Stack B (the org camera stack) gives a device profile its own row here,
+  // separate from the counting-stack `devices` row `loadDeviceConfig` reads.
+  const [door, setDoor] = useState<DoorCamera | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProfile()
-      .then(setProfile)
-      .catch((e: unknown) => setError(errorMessage(e)))
-      .finally(() => setLoading(false));
+    void (async () => {
+      try {
+        const loaded = await loadProfile();
+        setProfile(loaded);
+        if (loaded?.kind === "device") setDoor(await loadDoorCamera(loaded.id));
+      } catch (e: unknown) {
+        setError(errorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const pathname = window.location.pathname;
@@ -99,6 +110,7 @@ export default function App() {
     "/claim",
     "/scan",
     "/login",
+    "/attendance",
   ]);
   const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
   if (!isStaffPath)
@@ -155,13 +167,17 @@ export default function App() {
     );
   }
 
-  const home = profile.kind === "device" ? "/capture" : "/wall";
+  const home = profile.kind === "device" ? (door ? "/attendance" : "/capture") : "/wall";
 
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoading />}>
         <Routes>
           <Route path="/capture" element={<Capture profile={profile} />} />
+          <Route
+            path="/attendance"
+            element={door ? <AttendanceCamera door={door} /> : <Navigate to={home} replace />}
+          />
           <Route path="/wall" element={<Wall profile={profile} />} />
           <Route path="/stations" element={<Stations profile={profile} />} />
           <Route path="/station/:id" element={<Station profile={profile} />} />

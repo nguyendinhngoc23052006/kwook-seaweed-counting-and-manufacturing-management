@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { useParams } from "react-router-dom";
+import { AttendanceConfigDialog } from "../../components/org/AttendanceConfigDialog";
 import { CreateCameraDeviceDialog } from "../../components/org/CreateCameraDeviceDialog";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
@@ -29,29 +30,50 @@ function DeviceRow({
   canManage,
   onRevoke,
   revoking,
+  onConfigure,
   t,
 }: {
   d: CameraDevice;
   canManage: boolean;
   onRevoke: (id: string) => void;
   revoking: boolean;
+  onConfigure?: (d: CameraDevice) => void;
   t: ReturnType<typeof useT>;
 }): JSX.Element {
   const h = health(d.last_seen_at);
   return (
-    <div className="flex items-center justify-between rounded-lg border border-hairline bg-surface-raised p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hairline bg-surface-raised p-3">
       <div>
         <div className="font-medium text-ink">{d.name}</div>
         <div className="text-xs text-ink-faint">{t(`device.role_${d.role}`)}</div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {d.revoked_at ? (
           <Pill tone="danger">{t("device.admin_revoked")}</Pill>
         ) : (
           <Pill tone={h.tone}>{t(`device.health_${h.label}`)}</Pill>
         )}
+        {canManage &&
+          !d.revoked_at &&
+          (d.role === "check_in" || d.role === "check_out") &&
+          onConfigure && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="whitespace-nowrap"
+              onClick={() => onConfigure(d)}
+            >
+              {t("device.attendance_settings")}
+            </Button>
+          )}
         {canManage && !d.revoked_at && (
-          <Button size="sm" variant="danger" disabled={revoking} onClick={() => onRevoke(d.id)}>
+          <Button
+            size="sm"
+            variant="danger"
+            className="whitespace-nowrap"
+            disabled={revoking}
+            onClick={() => onRevoke(d.id)}
+          >
             {t("device.admin_revoke")}
           </Button>
         )}
@@ -105,6 +127,7 @@ export function CamerasPage(): JSX.Element {
   const t = useT();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [configDevice, setConfigDevice] = useState<CameraDevice | null>(null);
 
   const reach = useQuery({
     queryKey: ["org", "reach"],
@@ -175,6 +198,7 @@ export function CamerasPage(): JSX.Element {
                   canManage={canManage}
                   onRevoke={(id) => revoke.mutate(id)}
                   revoking={revoke.isPending}
+                  onConfigure={(device) => setConfigDevice(device)}
                   t={t}
                 />
               ))}
@@ -196,6 +220,19 @@ export function CamerasPage(): JSX.Element {
           onCreated={() =>
             queryClient.invalidateQueries({
               queryKey: ["cameras", "devices", nodeId],
+            })
+          }
+        />
+      )}
+
+      {configDevice !== null && (
+        <AttendanceConfigDialog
+          device={configDevice}
+          open={configDevice !== null}
+          onClose={() => setConfigDevice(null)}
+          onSaved={() =>
+            queryClient.invalidateQueries({
+              queryKey: ["cameras", "devices", nodeId ?? null],
             })
           }
         />
