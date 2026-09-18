@@ -493,7 +493,10 @@ export function NodePage(): JSX.Element {
           </Button>
         )}
 
+        {/* The root unit is the company itself and can never be archived
+            (org_guard_nodes refuses it), so it gets no lifecycle button. */}
         {canAddChild &&
+          node.parent_id !== null &&
           (node.active ? (
             confirmDeactivate ? (
               <>
