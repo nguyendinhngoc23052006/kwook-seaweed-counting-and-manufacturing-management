@@ -134,7 +134,7 @@ export function JobPostingsPage(): JSX.Element {
                       // careers site, a separate sibling app/router entirely
                       // (see PublicJobsApp), not a route inside this one.
                       <a
-                        href={`/careers/jobs/${job.id}`}
+                        href={`/jobs/${job.id}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-accent-text hover:underline"

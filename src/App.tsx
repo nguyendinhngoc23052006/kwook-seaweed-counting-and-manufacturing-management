@@ -28,20 +28,30 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  const pathname = window.location.pathname;
+
   // The demo is camera-only: no database reads, no writes, no device row. It
   // renders before the auth gate so the counter can be shown on any phone.
-  if (window.location.pathname === "/demo") return <Demo />;
+  if (pathname === "/demo") return <Demo />;
   // Pairing renders before the auth gate too: a camera-to-be has no session -
   // it shows a QR and receives one when an admin claims it.
-  if (window.location.pathname === "/pair") return <Pair />;
-  // The public careers site (job board, application form) has no account at
-  // all -- it renders before the auth gate too, same reason as /pair.
-  if (window.location.pathname.startsWith("/careers")) return <PublicJobsApp />;
+  if (pathname === "/pair") return <Pair />;
   // The org-admin section (org chart, capabilities, cameras, hiring, tasks)
   // is a self-contained sibling app: its own providers, its own auth/capability
   // gate against the persons/org_nodes model, entirely separate from the
   // profiles-table gate below that the device/wall/admin pages use.
-  if (window.location.pathname.startsWith("/org")) return <OrgApp />;
+  if (pathname.startsWith("/org")) return <OrgApp />;
+  // Explicit staff entry point -- the public site below has its own "Staff
+  // sign in" link pointing here, so it never fights the root path for it.
+  if (pathname === "/login") return <Login />;
+
+  // Everything that isn't one of the internal employee/device routes above
+  // is the public careers site, including the bare domain root: a stranger
+  // sharing this URL is sharing it for the job board, not an internal login
+  // screen. No account, no gate -- same reason /demo and /pair skip it.
+  const STAFF_PATHS = new Set(["/capture", "/wall", "/stations", "/admin", "/claim", "/scan"]);
+  const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
+  if (!isStaffPath) return <PublicJobsApp />;
 
   if (loading) {
     return (
