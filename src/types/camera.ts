@@ -51,5 +51,8 @@ export type CameraCapabilityKey = "manage_camera_devices" | "view_camera_data";
 export interface CapabilityReach {
   personId: string | null;
   isAdmin: boolean;
+  // The most senior rank ordinal the caller holds (lower = more senior), or
+  // null when they hold no live seat. An admin is bound by no rank at all.
+  rankOrdinal: number | null;
   byKey: Record<string, string[]>;
 }

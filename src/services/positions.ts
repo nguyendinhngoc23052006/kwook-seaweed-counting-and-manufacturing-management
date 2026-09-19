@@ -57,6 +57,10 @@ export async function createPosition(input: {
 export async function updatePosition(input: {
   positionId: string;
   title: string;
+  // Absent means "leave it alone", not "clear it". org_tree does not carry
+  // title_en, so a caller reading its seats from the tree has no current
+  // value to send back -- writing the column unconditionally would blank
+  // every English title the first time somebody renamed a seat.
   titleEn?: string | null;
   rankId: string;
 }): Promise<Position> {
@@ -64,13 +68,11 @@ export async function updatePosition(input: {
   if (!input.positionId) throw new Error("position required");
   if (!title) throw new Error("position title required");
   if (!input.rankId) throw new Error("rank required");
+  const row: Record<string, string | null> = { title, rank_id: input.rankId };
+  if (input.titleEn !== undefined) row.title_en = input.titleEn?.trim() || null;
   const { data, error } = await supabase()
     .from("positions")
-    .update({
-      title,
-      title_en: input.titleEn?.trim() || null,
-      rank_id: input.rankId,
-    })
+    .update(row)
     .eq("id", input.positionId)
     .select("*")
     .single();

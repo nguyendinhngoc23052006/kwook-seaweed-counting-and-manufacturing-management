@@ -209,18 +209,25 @@ const REACH_QUERIES: { key: CapabilityKey; strict: boolean }[] = [
 
 export async function getMyCapabilityReach(): Promise<CapabilityReach> {
   const client = supabase();
-  const [admin, person] = await Promise.all([
+  const [admin, person, rank] = await Promise.all([
     client.rpc("org_admin"),
     client.rpc("org_current_person_id"),
+    // The most senior rank the caller holds. The database decides who may edit
+    // which seat (org_guard_positions, 20260926000000); this is the same number,
+    // read once, so a screen can leave out the seats it would refuse rather than
+    // offer them and fail.
+    client.rpc("org_my_rank_ordinal"),
   ]);
   if (admin.error) throw admin.error;
   if (person.error) throw person.error;
+  if (rank.error) throw rank.error;
   const personId = typeof person.data === "string" ? person.data : null;
+  const rankOrdinal = typeof rank.data === "number" ? rank.data : null;
 
   // An admin reaches every node, and capabilityReaches() below checks isAdmin
   // before it ever reads byKey. Asking the reach queries anyway walks the
   // whole tree per navigation and discards the answer.
-  if (admin.data === true) return { personId, isAdmin: true, byKey: {} };
+  if (admin.data === true) return { personId, isAdmin: true, rankOrdinal, byKey: {} };
 
   const reaches = await Promise.all(
     REACH_QUERIES.map((query) =>
@@ -241,7 +248,7 @@ export async function getMyCapabilityReach(): Promise<CapabilityReach> {
       : [];
   });
 
-  return { personId, isAdmin: false, byKey };
+  return { personId, isAdmin: false, rankOrdinal, byKey };
 }
 
 // The bootstrap pair -- the sysadmin and whoever holds the root seat --
