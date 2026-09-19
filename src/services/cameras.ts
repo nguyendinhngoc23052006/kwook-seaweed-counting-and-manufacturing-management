@@ -95,6 +95,42 @@ export async function claimCameraPairing(input: {
   }
 }
 
+// Re-pairing points an EXISTING camera at whatever phone is showing the QR.
+//
+// A camera's identity -- its row and its auth account -- is permanent. What is
+// fragile is the login the phone keeps in its own storage, which browsers evict
+// and people clear. Without this, a phone that lost its login had to be paired
+// afresh, minting a second camera and orphaning the first, so one physical
+// camera's history arrived split across two rows that nothing joins. Same row,
+// same history, new handset.
+//
+// The node is not passed: the server reads it from the camera's own row, so
+// re-pairing can never quietly move a camera somewhere else.
+export async function repairCameraPairing(input: {
+  deviceId: string;
+  code: string;
+}): Promise<void> {
+  const code = input.code.trim();
+  if (!input.deviceId) throw new Error("camera required");
+  if (!code) throw new Error("pairing code required");
+  const { data, error } = await supabase().functions.invoke("pair-claim", {
+    body: { code, device_id: input.deviceId },
+  });
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const body = await context.json().catch(() => null);
+      if (body && typeof body === "object" && "error" in body) {
+        throw new Error(String((body as { error: unknown }).error));
+      }
+    }
+    throw error;
+  }
+  if (data && typeof data === "object" && "error" in data && data.error) {
+    throw new Error(String((data as { error: unknown }).error));
+  }
+}
+
 export async function revokeCameraDevice(deviceId: string): Promise<void> {
   const client = supabase();
   const { error } = await client.rpc("org_camera_revoke_device", {

@@ -6,6 +6,7 @@ import { CameraStationsPanel } from "../../components/org/CameraStationsPanel";
 import { EditCameraDeviceDialog } from "../../components/org/EditCameraDeviceDialog";
 import { PairCameraDialog } from "../../components/org/PairCameraDialog";
 import { readPairingCode } from "../../components/org/PairingCodeScanner";
+import { RepairCameraDialog } from "../../components/org/RepairCameraDialog";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -35,6 +36,7 @@ function DeviceRow({
   revoking,
   onConfigure,
   onEdit,
+  onRepair,
   onRestore,
   t,
 }: {
@@ -44,6 +46,7 @@ function DeviceRow({
   revoking: boolean;
   onConfigure?: (d: CameraDevice) => void;
   onEdit?: (d: CameraDevice) => void;
+  onRepair?: (d: CameraDevice) => void;
   onRestore?: (id: string) => void;
   t: ReturnType<typeof useT>;
 }): JSX.Element {
@@ -76,6 +79,18 @@ function DeviceRow({
         {canManage && !d.revoked_at && onEdit && (
           <Button size="sm" variant="ghost" className="whitespace-nowrap" onClick={() => onEdit(d)}>
             {t("device.edit")}
+          </Button>
+        )}
+        {/* A phone that lost its login rejoins the camera it already was,
+            instead of pairing afresh and splitting its history in two. */}
+        {canManage && !d.revoked_at && onRepair && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="whitespace-nowrap"
+            onClick={() => onRepair(d)}
+          >
+            {t("repair.button")}
           </Button>
         )}
         {canManage && d.revoked_at && onRestore && (
@@ -167,6 +182,7 @@ export function CamerasPage(): JSX.Element {
   });
   const [configDevice, setConfigDevice] = useState<CameraDevice | null>(null);
   const [editDevice, setEditDevice] = useState<CameraDevice | null>(null);
+  const [repairDevice, setRepairDevice] = useState<CameraDevice | null>(null);
 
   useEffect(() => {
     if (scannedCode) setCreateOpen(true);
@@ -251,6 +267,7 @@ export function CamerasPage(): JSX.Element {
                   revoking={revoke.isPending}
                   onConfigure={(device) => setConfigDevice(device)}
                   onEdit={(device) => setEditDevice(device)}
+                  onRepair={(device) => setRepairDevice(device)}
                   t={t}
                 />
               ))}
@@ -284,6 +301,17 @@ export function CamerasPage(): JSX.Element {
       )}
 
       {nodeId && <CameraStationsPanel nodeId={nodeId} canManage={canManage} />}
+
+      {repairDevice !== null && (
+        <RepairCameraDialog
+          open={true}
+          device={repairDevice}
+          onClose={() => setRepairDevice(null)}
+          onRepaired={() =>
+            queryClient.invalidateQueries({ queryKey: ["cameras", "devices", nodeId ?? null] })
+          }
+        />
+      )}
 
       {editDevice !== null && nodeId && (
         <EditCameraDeviceDialog

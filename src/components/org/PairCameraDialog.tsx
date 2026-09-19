@@ -10,6 +10,7 @@ import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { PairingCodeScanner } from "./PairingCodeScanner";
+import { StartPairingQr } from "./StartPairingQr";
 
 const ROLES: CameraDeviceRole[] = [
   "counting",
@@ -86,6 +87,7 @@ export function PairCameraDialog({
           }}
         >
           <p className="text-sm text-ink-muted">{t("pair.dialog_hint")}</p>
+          <StartPairingQr />
 
           <div>
             <Label htmlFor="pair-camera-name">{t("device.create_name")}</Label>
