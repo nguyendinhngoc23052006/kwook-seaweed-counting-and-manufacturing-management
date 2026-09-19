@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
+import { SysadminsPanel } from "../../components/org/SysadminsPanel";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -140,6 +141,8 @@ export function RanksPage(): JSX.Element {
         )}
         <p className="pb-2 pt-3 text-xs text-muted-foreground">{t("ranks.retire_hint")}</p>
       </Section>
+
+      <SysadminsPanel />
 
       <Section title={t("ranks.add")} description={t("ranks.add_hint")}>
         <div className="space-y-4 py-2">

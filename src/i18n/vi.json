@@ -783,5 +783,15 @@
   "interviews.release": "Gỡ lịch",
   "interviews.starts": "Bắt đầu",
   "interviews.remove": "Xoá",
-  "interviews.retime_hint": "Dời giờ bắt đầu sẽ dời luôn giờ kết thúc, giữ nguyên độ dài."
+  "interviews.retime_hint": "Dời giờ bắt đầu sẽ dời luôn giờ kết thúc, giữ nguyên độ dài.",
+  "sysadmins.title": "Quản trị hệ thống",
+  "sysadmins.hint": "Các tài khoản thiết lập và khôi phục được mọi thứ. Nên giữ ít nhất hai — một tài khoản không thể thay thế là điểm chết của cả hệ thống.",
+  "sysadmins.since": "Từ {date}",
+  "sysadmins.retire": "Thôi quyền",
+  "sysadmins.appoint": "Bổ nhiệm",
+  "sysadmins.email": "Email của họ",
+  "sysadmins.email_hint": "Họ phải đăng nhập ít nhất một lần để tài khoản tồn tại.",
+  "sysadmins.last_one": "Đây là quản trị viên duy nhất. Hãy bổ nhiệm người thứ hai trước khi cho ai thôi quyền — hệ thống không thể không có quản trị viên nào.",
+  "sysadmins.appoint_failed": "Không bổ nhiệm được tài khoản đó.",
+  "sysadmins.retire_failed": "Không cho tài khoản đó thôi quyền được."
 }

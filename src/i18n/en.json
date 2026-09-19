@@ -783,5 +783,15 @@
   "interviews.release": "Release",
   "interviews.starts": "Starts",
   "interviews.remove": "Remove",
-  "interviews.retime_hint": "Moving the start moves the end with it, keeping the same length."
+  "interviews.retime_hint": "Moving the start moves the end with it, keeping the same length.",
+  "sysadmins.title": "System administrators",
+  "sysadmins.hint": "The accounts that can set everything up and recover it. Keep at least two — an account that cannot be replaced is a single point of failure.",
+  "sysadmins.since": "Since {date}",
+  "sysadmins.retire": "Stand down",
+  "sysadmins.appoint": "Appoint",
+  "sysadmins.email": "Their email",
+  "sysadmins.email_hint": "They must have signed in at least once, so the account exists.",
+  "sysadmins.last_one": "This is the only administrator. Appoint a second one before standing anybody down — the system cannot be administered with none.",
+  "sysadmins.appoint_failed": "Could not appoint that account.",
+  "sysadmins.retire_failed": "Could not stand that account down."
 }
