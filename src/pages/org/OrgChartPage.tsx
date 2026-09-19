@@ -48,6 +48,36 @@ const MAX_DEPTH = 100000;
 // overview is for; the rest opens on ask.
 const OPEN_TO_DEPTH = 2;
 
+// The chart's shape. It is a plain nested ul/li tree, so these classes ARE the
+// org chart -- without them the browser renders one tall single-file column.
+//
+// Each child carries half a horizontal rule; its half meets its sibling's over
+// their shared midpoint. `after` also drops the stem into the box below it.
+// The first child has no left neighbour and the last none on the right, so each
+// trims the half that would hang into empty space -- the last one instead turns
+// its `before` into the corner that brings the rule down into its own box.
+// An only child needs no rule at all: the stem on its `ul` is the whole
+// connector.
+const BRANCH_LI = [
+  "relative list-none px-2 pt-5 text-center",
+  "before:absolute before:top-0 before:right-1/2 before:h-5 before:w-1/2 before:border-t before:border-hairline before:content-['']",
+  "after:absolute after:top-0 after:left-1/2 after:h-5 after:w-1/2 after:border-t after:border-l after:border-hairline after:content-['']",
+  "first:before:border-0 first:after:rounded-tl-md",
+  "last:after:border-0 last:before:border-r last:before:rounded-tr-md",
+  "only:before:hidden only:after:hidden",
+].join(" ");
+
+// The root box has no parent to connect to.
+const ROOT_LI = "relative list-none text-center";
+
+// A row of children, plus the stem that reaches up to their parent.
+const BRANCH_UL = [
+  "relative flex list-none justify-center p-0 pt-5",
+  "before:absolute before:top-0 before:left-1/2 before:h-5 before:w-0 before:border-l before:border-hairline before:content-['']",
+].join(" ");
+
+const ROOT_UL = "flex list-none justify-center p-0";
+
 // How long to let someone keep typing before a keystroke recomputes matches
 // and re-lays-out the tree. Matching itself is a substring scan over a
 // pre-folded index (built once per snapshot, not per keystroke) so this exists
@@ -214,7 +244,7 @@ function Branch({
   const show = searching ? opened.has(node.id) : depth < OPEN_TO_DEPTH || opened.has(node.id);
   const buried = countBelow(index, node.id);
   return (
-    <li>
+    <li className={depth === 1 ? ROOT_LI : BRANCH_LI}>
       <NodeBox
         node={node}
         natures={natures}
@@ -234,7 +264,7 @@ function Branch({
         </button>
       )}
       {children.length > 0 && show && (
-        <ul>
+        <ul className={BRANCH_UL}>
           {children.map((child) => (
             <Branch
               key={child.id}
@@ -557,7 +587,7 @@ export function OrgChartPage(): JSX.Element {
         <div
           ref={attachPane}
           className={`min-h-0 flex-1 overflow-auto pb-4 ${
-            isDragging ? "cursor-grabbing select-none" : "cursor-grab"
+            isDragging ? "cursor-grabbing" : "cursor-grab"
           }`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -565,8 +595,8 @@ export function OrgChartPage(): JSX.Element {
           onPointerCancel={endDrag}
           onClickCapture={handleClickCapture}
         >
-          <div className="org-tree min-w-max">
-            <ul>
+          <div className="org-tree min-w-max select-none">
+            <ul className={ROOT_UL}>
               {roots.map((root) => (
                 <Branch
                   key={root.id}
