@@ -244,7 +244,7 @@ jobs:
             -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN" | jq -r '.[0].role // empty')
           [ "$PROLE" = "pending" ] || { echo "A fresh signup got role '$PROLE' instead of 'pending' - the approval gate is broken"; exit 1; }
 
-          PROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/count_minutes?select=id&limit=1" \
+          PROWS=$(curl -sS --fail --max-time 30 "$SUPA_URL/rest/v1/camera_count_minutes?select=id&limit=1" \
             -H "apikey: $KEY" -H "Authorization: Bearer $PTOKEN")
           printf '%s' "$PROWS" | jq -e 'type == "array" and length == 0' >/dev/null \
             || { echo "A PENDING account can read tenant data - RLS is broken. Body:"; printf '%s\n' "$PROWS"; exit 1; }
