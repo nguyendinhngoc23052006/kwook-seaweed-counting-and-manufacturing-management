@@ -289,12 +289,18 @@ table td {
   flex-wrap: wrap;
   align-items: center;
 }
-.grid {
+/* NOT `.grid`. Tailwind ships a `grid` utility that sets `display` and
+   nothing else, so a `grid-template-columns` here had no competing
+   declaration and layers could not arbitrate: every hub element written as
+   className="grid" silently became a 220px auto-fill multi-column grid.
+   The org hub's dialogs were laying out their title beside their form
+   because of this rule. Named for the floor pages that actually want it. */
+.floor-grid {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
 }
-.grid--wide {
+.floor-grid--wide {
   grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
 }
 

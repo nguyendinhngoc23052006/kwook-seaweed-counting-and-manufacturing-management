@@ -195,7 +195,7 @@ export default function Wall({ profile }: { profile: Profile }) {
         {loading ? (
           <div className="section">
             <h2 className="section__title skeleton">Loading lines</h2>
-            <div className="grid grid--wide">
+            <div className="floor-grid floor-grid--wide">
               {["a", "b", "c"].map((key) => (
                 <div className="card stack" key={key}>
                   <span className="skeleton">Station name</span>
@@ -237,7 +237,7 @@ export default function Wall({ profile }: { profile: Profile }) {
                   <h2 className="section__title">{group.name}</h2>
                   <span className="muted">{lineTotal.toLocaleString()} leaves today</span>
                 </div>
-                <div className="grid grid--wide">
+                <div className="floor-grid floor-grid--wide">
                   {group.stations.map((station) => {
                     const stationMinutes = minutesByStation.get(station.id) ?? [];
                     const session = sessionByStation.get(station.id);
@@ -290,7 +290,7 @@ export default function Wall({ profile }: { profile: Profile }) {
                 <span>Ask an owner to assign them in Cameras.</span>
               )}
             </div>
-            <div className="grid">
+            <div className="floor-grid">
               {unstationed.map((session) => {
                 const state = sessionState(session);
                 return (
