@@ -17,6 +17,7 @@ import { AttendancePage } from "../pages/org/AttendancePage";
 import { CamerasPage } from "../pages/org/CamerasPage";
 import { JobApplicationsPage } from "../pages/org/JobApplicationsPage";
 import { JobPostingsPage } from "../pages/org/JobPostingsPage";
+import { LifecycleCatalogPage } from "../pages/org/LifecycleCatalogPage";
 import { NodePage } from "../pages/org/NodePage";
 import { NotificationsPage } from "../pages/org/NotificationsPage";
 import { OrgChartPage } from "../pages/org/OrgChartPage";
@@ -247,6 +248,10 @@ function OrgRoutes() {
       <Route path="/org/attendance/:nodeId" element={<AttendancePage />} />
       <Route path="/org/chart" element={<OrgChartPage />} />
       <Route path="/org/ranks" element={<RanksPage />} />
+      {/* Reads nothing, writes nothing: every state drawn with the real
+          components so a reviewer can see them all without arranging the
+          data that would produce each one. */}
+      <Route path="/org/catalog" element={<LifecycleCatalogPage />} />
       <Route path="/org/jobs" element={<JobPostingsPage />} />
       <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
       <Route path="/org/work" element={<WorkPage />} />
