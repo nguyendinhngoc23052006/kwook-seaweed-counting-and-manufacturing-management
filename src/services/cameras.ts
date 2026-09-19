@@ -58,3 +58,83 @@ export async function revokeCameraDevice(deviceId: string): Promise<void> {
   });
   if (error) throw error;
 }
+
+// Placement after pairing. Until 20260929000000 camera_devices was SELECT-only
+// to every client with no write policy at all, so a camera's name, role,
+// station and unit were frozen at creation and the only way to move a camera
+// was to revoke it and pair a new one -- starting its attendance history over.
+// CLAUDE.md rule 2 makes the owner the single placement authority; this is
+// what lets them exercise it more than once.
+export async function updateCameraDevice(input: {
+  deviceId: string;
+  name?: string;
+  role?: CameraDeviceRole;
+  stationId?: string | null;
+  nodeId?: string;
+}): Promise<void> {
+  if (!input.deviceId) throw new Error("device required");
+  const { error } = await supabase().rpc("org_camera_update_device", {
+    p_device_id: input.deviceId,
+    p_name: input.name?.trim() || null,
+    p_role: input.role ?? null,
+    // null means "leave it"; clearing needs its own flag, or a camera could
+    // never be detached from a station once attached.
+    p_station_id: input.stationId ?? null,
+    p_clear_station: input.stationId === null,
+    p_node_id: input.nodeId ?? null,
+  });
+  if (error) throw error;
+}
+
+// revoked_at was set by an RPC and cleared by nothing: a camera revoked by
+// mistake was cut off permanently.
+export async function restoreCameraDevice(deviceId: string): Promise<void> {
+  if (!deviceId) throw new Error("device required");
+  const { error } = await supabase().rpc("org_camera_restore_device", {
+    p_device_id: deviceId,
+  });
+  if (error) throw error;
+}
+
+// Stations have had full write policies and grants since they were created and
+// no service function ever used them, so a device could never be given a
+// placement to point at.
+export async function createCameraStation(input: {
+  nodeId: string;
+  name: string;
+  line: string;
+  kind: CameraStation["kind"];
+}): Promise<CameraStation> {
+  const name = input.name.trim();
+  const line = input.line.trim();
+  if (!name) throw new Error("station name required");
+  if (!line) throw new Error("line required");
+  const { data, error } = await supabase()
+    .from("camera_stations")
+    .insert({ org_node_id: input.nodeId, name, line, kind: input.kind })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as CameraStation;
+}
+
+export async function updateCameraStation(
+  stationId: string,
+  patch: { name?: string; line?: string; kind?: CameraStation["kind"]; active?: boolean },
+): Promise<CameraStation> {
+  if (!stationId) throw new Error("station required");
+  const row: Record<string, string | boolean> = {};
+  if (patch.name !== undefined) row.name = patch.name.trim();
+  if (patch.line !== undefined) row.line = patch.line.trim();
+  if (patch.kind !== undefined) row.kind = patch.kind;
+  if (patch.active !== undefined) row.active = patch.active;
+  if (Object.keys(row).length === 0) throw new Error("nothing to change");
+  const { data, error } = await supabase()
+    .from("camera_stations")
+    .update(row)
+    .eq("id", stationId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as CameraStation;
+}
