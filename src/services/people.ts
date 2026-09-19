@@ -228,6 +228,24 @@ export async function attachAccount(personId: string, accountId: string | null):
   return data as Person;
 }
 
+// The accounts that have signed up and belong to nobody yet.
+//
+// This is the approval queue, in org terms: somebody signs up, a person record
+// and a seat are created for them, and attaching the two is what grants access.
+// The role then follows from the seat, which is why nothing here edits a role.
+// Claimed cameras are auth accounts too and are excluded server-side.
+export interface UnattachedAccount {
+  account_id: string;
+  email: string;
+  signed_up_at: string;
+}
+
+export async function listUnattachedAccounts(): Promise<UnattachedAccount[]> {
+  const { data, error } = await supabase().rpc("org_unattached_accounts");
+  if (error) throw error;
+  return (data ?? []) as UnattachedAccount[];
+}
+
 // Offboarding, suspension, and coming back. Never a delete: employee codes
 // must never be reused, so the row and every hour it ever worked stay. Since
 // 20260928000000 this is what actually removes authority -- a non-active

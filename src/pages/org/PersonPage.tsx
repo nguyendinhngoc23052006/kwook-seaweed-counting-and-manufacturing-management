@@ -12,8 +12,10 @@ import {
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
+import { Label } from "../../components/ui/Input";
 import { Pill } from "../../components/ui/Pill";
 import { Section } from "../../components/ui/Section";
+import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
@@ -22,6 +24,7 @@ import {
   attachAccount,
   getPerson,
   getPersonBankDetails,
+  listUnattachedAccounts,
   savePersonBankDetails,
   setPersonStatus,
   updatePersonProfile,
@@ -44,6 +47,7 @@ export function PersonPage(): JSX.Element {
   const [draft, setDraft] = useState<PersonDraft>(emptyPersonDraft);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [chosenAccount, setChosenAccount] = useState("");
 
   const person = useQuery({
     queryKey: ["org", "person", personId],
@@ -120,6 +124,26 @@ export function PersonPage(): JSX.Element {
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ["org", "person", personId] });
+    },
+    onError: (e) => setError(errorMessage(e, t("person_page.account_failed"))),
+  });
+
+  // The other half of the link. Until now a person could be UNlinked from a
+  // login but never linked to one, so granting access meant opening the
+  // database and pasting a uuid no screen displayed.
+  const waiting = useQuery({
+    queryKey: ["org", "unattached-accounts"],
+    queryFn: listUnattachedAccounts,
+    enabled: myReach.data?.isAdmin === true && person.data?.account_id == null,
+  });
+
+  const attach = useMutation({
+    mutationFn: (accountId: string) => attachAccount(personId as string, accountId),
+    onSuccess: () => {
+      setError(null);
+      setChosenAccount("");
+      queryClient.invalidateQueries({ queryKey: ["org", "person", personId] });
+      queryClient.invalidateQueries({ queryKey: ["org", "unattached-accounts"] });
     },
     onError: (e) => setError(errorMessage(e, t("person_page.account_failed"))),
   });
@@ -272,7 +296,46 @@ export function PersonPage(): JSX.Element {
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">{t("person_page.no_login_yet")}</p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">{t("person_page.no_login_yet")}</p>
+                    {waiting.isLoading ? (
+                      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                    ) : (waiting.data ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {t("person_page.no_account_waiting")}
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-[16rem] flex-1">
+                          <Label htmlFor="attach-account">
+                            {t("person_page.attach_login_label")}
+                          </Label>
+                          <Select
+                            value={chosenAccount}
+                            onChange={setChosenAccount}
+                            disabled={attach.isPending}
+                            options={[
+                              { value: "", label: t("person_page.attach_login_choose") },
+                              ...(waiting.data ?? []).map((a) => ({
+                                value: a.account_id,
+                                label: a.email,
+                              })),
+                            ]}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          disabled={!chosenAccount || attach.isPending}
+                          onClick={() => attach.mutate(chosenAccount)}
+                        >
+                          {t("person_page.attach_login")}
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {t("person_page.attach_login_hint")}
+                    </p>
+                  </div>
                 )}
               </div>
             )}
