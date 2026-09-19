@@ -78,6 +78,23 @@ create policy camera_lines_write on public.camera_lines for all
 
 grant select, insert, update, delete on public.camera_lines to authenticated;
 
+-- Naming a line is how a line comes to exist: the admin types "Line A" on the
+-- station form and means the one that is already there if there is one. Doing
+-- that as select-then-insert from the browser races two admins into a 23505 on
+-- the same name. INVOKER rights on purpose -- camera_lines_write is the gate,
+-- so this adds no privilege, only atomicity. The do-update is what makes the
+-- insert return the existing row's id rather than nothing.
+create or replace function public.org_camera_line_id(p_node_id uuid, p_name text)
+returns uuid language sql security invoker set search_path = public as $$
+  insert into public.camera_lines (org_node_id, name)
+  values (p_node_id, btrim(p_name))
+  on conflict (org_node_id, lower(btrim(name)))
+    do update set name = public.camera_lines.name
+  returning id;
+$$;
+
+grant execute on function public.org_camera_line_id(uuid, text) to authenticated;
+
 commit;
 
 begin;

@@ -31,7 +31,10 @@ export interface CameraStation {
   id: string;
   org_node_id: string;
   name: string;
-  line: string;
+  line_id: string;
+  // Joined from camera_lines for display. The station stores the id; the name
+  // lives in one place so renaming a line renames it everywhere at once.
+  line_name: string;
   kind: CameraDeviceRole;
   active: boolean;
   created_at: string;

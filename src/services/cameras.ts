@@ -25,11 +25,31 @@ export async function listCameraStations(nodeId: string): Promise<CameraStation[
   const client = supabase();
   const { data, error } = await client
     .from("camera_stations")
-    .select("*")
+    .select("*, camera_lines(name)")
     .eq("org_node_id", nodeId)
     .order("name");
   if (error) throw error;
-  return (data ?? []) as CameraStation[];
+  const rows = (data ?? []) as (Omit<CameraStation, "line_name"> & {
+    camera_lines: { name: string } | null;
+  })[];
+  return rows.map(({ camera_lines, ...station }) => ({
+    ...station,
+    line_name: camera_lines?.name ?? "",
+  }));
+}
+
+// A line exists because someone named it. Resolving here rather than making the
+// admin pick from a list first keeps the station form one screen: they type the
+// line, and the same words always land on the same row.
+async function lineIdFor(nodeId: string, name: string): Promise<string> {
+  const line = name.trim();
+  if (!line) throw new Error("line required");
+  const { data, error } = await supabase().rpc("org_camera_line_id", {
+    p_node_id: nodeId,
+    p_name: line,
+  });
+  if (error) throw error;
+  return data as string;
 }
 
 export async function createCameraDevice(input: {
@@ -106,26 +126,37 @@ export async function createCameraStation(input: {
   kind: CameraStation["kind"];
 }): Promise<CameraStation> {
   const name = input.name.trim();
-  const line = input.line.trim();
   if (!name) throw new Error("station name required");
-  if (!line) throw new Error("line required");
+  const lineId = await lineIdFor(input.nodeId, input.line);
   const { data, error } = await supabase()
     .from("camera_stations")
-    .insert({ org_node_id: input.nodeId, name, line, kind: input.kind })
-    .select("*")
+    .insert({ org_node_id: input.nodeId, name, line_id: lineId, kind: input.kind })
+    .select("*, camera_lines(name)")
     .single();
   if (error) throw error;
-  return data as CameraStation;
+  const { camera_lines, ...station } = data as Omit<CameraStation, "line_name"> & {
+    camera_lines: { name: string } | null;
+  };
+  return { ...station, line_name: camera_lines?.name ?? "" };
 }
 
 export async function updateCameraStation(
   stationId: string,
-  patch: { name?: string; line?: string; kind?: CameraStation["kind"]; active?: boolean },
+  patch: {
+    nodeId?: string;
+    name?: string;
+    line?: string;
+    kind?: CameraStation["kind"];
+    active?: boolean;
+  },
 ): Promise<CameraStation> {
   if (!stationId) throw new Error("station required");
   const row: Record<string, string | boolean> = {};
   if (patch.name !== undefined) row.name = patch.name.trim();
-  if (patch.line !== undefined) row.line = patch.line.trim();
+  if (patch.line !== undefined) {
+    if (!patch.nodeId) throw new Error("node required to move a station to a line");
+    row.line_id = await lineIdFor(patch.nodeId, patch.line);
+  }
   if (patch.kind !== undefined) row.kind = patch.kind;
   if (patch.active !== undefined) row.active = patch.active;
   if (Object.keys(row).length === 0) throw new Error("nothing to change");
@@ -133,8 +164,11 @@ export async function updateCameraStation(
     .from("camera_stations")
     .update(row)
     .eq("id", stationId)
-    .select("*")
+    .select("*, camera_lines(name)")
     .single();
   if (error) throw error;
-  return data as CameraStation;
+  const { camera_lines, ...station } = data as Omit<CameraStation, "line_name"> & {
+    camera_lines: { name: string } | null;
+  };
+  return { ...station, line_name: camera_lines?.name ?? "" };
 }
