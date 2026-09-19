@@ -18,12 +18,16 @@ export default function Pair() {
   const [status, setStatus] = useState<"waiting" | "signing-in">("waiting");
   const [error, setError] = useState<string | null>(null);
 
-  // The QR carries the CODE, not a link. Claiming happens in the management
-  // hub, at the unit the camera is standing in -- there is no page to open and
-  // nothing a stranger's camera app can do with this.
+  // A LINK, not a bare code. A bare code only the in-app scanner understands
+  // means a phone's own camera app reads the QR, shows 64 characters of hex and
+  // offers nothing -- which is exactly how this screen stopped working. The
+  // link lands a signed-in manager on Cameras with the claim already filled in;
+  // to anyone else it is a page that asks them to sign in, and the code alone
+  // grants nothing without someone who may manage cameras at a unit.
   useEffect(() => {
     if (canvasRef.current) {
-      void QRCode.toCanvas(canvasRef.current, codeRef.current, { width: 260, margin: 1 });
+      const claimUrl = `${window.location.origin}/org/cameras#pair=${codeRef.current}`;
+      void QRCode.toCanvas(canvasRef.current, claimUrl, { width: 260, margin: 1 });
     }
   }, []);
 
@@ -43,7 +47,11 @@ export default function Pair() {
           token_hash: data as string,
         });
         if (verify.error) throw verify.error;
-        window.location.replace("/");
+        // NOT "/": the bare root is the public careers site, so a camera that
+        // signed in perfectly well landed on the job board and never became a
+        // camera at all. /camera is a staff path that resolves to whichever
+        // screen this camera's own role calls for.
+        window.location.replace("/camera");
       } catch (e: unknown) {
         setError(errorMessage(e));
       }

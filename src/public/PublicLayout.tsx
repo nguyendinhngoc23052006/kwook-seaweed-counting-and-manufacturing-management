@@ -2,6 +2,7 @@ import { type JSX, useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { Select } from "../components/ui/Select";
 import { useI18n } from "../lib/i18n";
+import { loadProfile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
 
 // The unauthenticated shell. Deliberately NOT the employee Shell: this has no
@@ -9,12 +10,19 @@ import { supabase } from "../lib/supabaseClient";
 // work here yet. The only way in is the one link at the top right.
 export function PublicLayout(): JSX.Element {
   const { t, locale, setLocale } = useI18n();
-  const [signedIn, setSignedIn] = useState(false);
+  // Not just WHETHER someone is signed in, but WHAT. A camera is a machine
+  // account: offering it "go to your workspace" sent it to a hub it can see
+  // nothing in, and the only session on that browser was the camera's -- so
+  // the person holding the phone could not get back to being themselves.
+  // A device gets its own screen and a way out instead.
+  const [who, setWho] = useState<"anonymous" | "person" | "camera">("anonymous");
 
   useEffect(() => {
-    supabase()
-      .auth.getUser()
-      .then(({ data }) => setSignedIn(!!data.user));
+    void (async () => {
+      const profile = await loadProfile().catch(() => null);
+      if (!profile) return setWho("anonymous");
+      setWho(profile.kind === "device" ? "camera" : "person");
+    })();
   }, []);
 
   return (
@@ -39,11 +47,30 @@ export function PublicLayout(): JSX.Element {
                 router (see PublicJobsApp), so leaving it needs a real
                 navigation for App.tsx to re-evaluate which app owns the path. */}
             <a
-              href={signedIn ? "/org" : "/login"}
+              href={who === "camera" ? "/camera" : who === "person" ? "/org" : "/login"}
               className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-primary-text hover:bg-surface-muted"
             >
-              {signedIn ? t("public.go_to_workspace") : t("public.staff_sign_in")}
+              {who === "camera"
+                ? t("public.open_camera")
+                : who === "person"
+                  ? t("public.go_to_workspace")
+                  : t("public.staff_sign_in")}
             </a>
+            {/* The way back to being yourself on a phone that became a camera.
+                Without it the camera's session owns the browser and there is
+                nothing on any screen that can end it. */}
+            {who === "camera" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase().auth.signOut();
+                  window.location.replace("/login");
+                }}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-ink-faint hover:bg-surface-muted"
+              >
+                {t("common.sign_out")}
+              </button>
+            )}
           </div>
         </div>
       </header>

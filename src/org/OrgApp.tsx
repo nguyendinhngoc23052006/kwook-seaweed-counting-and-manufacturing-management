@@ -10,6 +10,7 @@ import { ListSkeleton } from "../components/ui/Skeleton";
 import { errorMessage } from "../lib/errorMessage";
 import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
+import { loadProfile } from "../lib/session";
 import { supabase } from "../lib/supabaseClient";
 import Login from "../pages/Login";
 import { AttendancePage } from "../pages/org/AttendancePage";
@@ -73,6 +74,40 @@ function BootScreen({ children }: { children: ReactNode }) {
   return <div className="mx-auto w-full max-w-lg px-4 py-10 sm:px-6">{children}</div>;
 }
 
+// Every dead end here needs a way out. A phone that reached one of these
+// screens as the wrong account could otherwise not even sign out of it, which
+// is how a paired camera became a brick showing "not set up yet".
+function SignOutEscape() {
+  const { t } = useI18n();
+  return (
+    <div className="mt-4 flex justify-center">
+      <Button
+        variant="secondary"
+        onClick={async () => {
+          await supabase().auth.signOut();
+          window.location.replace("/");
+        }}
+      >
+        {t("common.sign_out")}
+      </Button>
+    </div>
+  );
+}
+
+// The hub is for people. A camera is a machine account -- it holds no seat and
+// no capability, so every query here returns nothing and the screens below
+// would tell it the organisation does not exist. It belongs on its own screen.
+function LeaveToCamera() {
+  useEffect(() => {
+    window.location.replace("/camera");
+  }, []);
+  return (
+    <BootScreen>
+      <ListSkeleton rows={2} />
+    </BootScreen>
+  );
+}
+
 // An organisation with no root node is not "loading" -- it is a business that
 // has not been set up yet. Before this, the hub rendered a spinner that never
 // resolved, so a fresh install had no first step and no way to reach one.
@@ -93,10 +128,15 @@ function FirstRun() {
       </BootScreen>
     );
 
+  // Seeing no root node is not the same fact for everybody. An admin sees none
+  // because there is none. Anyone else sees none because org_nodes is
+  // RLS-filtered and theirs shows nothing -- telling them the business has not
+  // been created is simply false, and it was the only thing on the screen.
   if (!me.data?.isAdmin) {
     return (
       <BootScreen>
-        <Empty title={t("firstrun.not_ready_title")} description={t("firstrun.not_ready_body")} />
+        <Empty title={t("firstrun.no_access_title")} description={t("firstrun.no_access_body")} />
+        <SignOutEscape />
       </BootScreen>
     );
   }
@@ -132,6 +172,7 @@ function NoSeat() {
   return (
     <BootScreen>
       <Empty title={t("noseat.title")} description={t("noseat.body")} />
+      <SignOutEscape />
     </BootScreen>
   );
 }
@@ -148,6 +189,9 @@ function OrgRoutes() {
   const { pathname } = useLocation();
   const isBounded = BOUNDED_CONTENT_ROUTES.includes(pathname);
   const me = useQuery({ queryKey: ["profile", "me"], queryFn: getMyProfile });
+  const session = useQuery({ queryKey: ["profile", "session"], queryFn: loadProfile });
+
+  if (session.data?.kind === "device") return <LeaveToCamera />;
 
   if (error) {
     return (
@@ -184,7 +228,17 @@ function OrgRoutes() {
           `/settings` siblings) -- reusing CamerasPage rather than rewriting
           those three links to the older `/org/cameras/:id` tab route. */}
       <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
-      <Route path="/org/cameras" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+      {/* The hash rides along: a pairing QR points at /org/cameras#pair=<code>
+          and a bare string `to` would drop it on the way to the node route. */}
+      <Route
+        path="/org/cameras"
+        element={
+          <Navigate
+            to={{ pathname: `/org/cameras/${rootNodeId}`, hash: window.location.hash }}
+            replace
+          />
+        }
+      />
       <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
       <Route
         path="/org/attendance"

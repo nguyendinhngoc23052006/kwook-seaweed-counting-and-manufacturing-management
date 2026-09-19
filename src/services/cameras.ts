@@ -11,6 +11,10 @@ export async function listCameraDevices(nodeId: string): Promise<CameraDevice[]>
   const { data, error } = await client
     .from("camera_devices")
     .select("*")
+    // RLS lets the sysadmin and the CEO see archived cameras, so the live list
+    // has to say it does not want them -- otherwise an admin's Cameras page
+    // quietly fills up with everything anyone ever hid.
+    .is("archived_at", null)
     .eq("org_node_id", nodeId)
     .order("name");
   if (error) throw error;
@@ -95,12 +99,91 @@ export async function claimCameraPairing(input: {
   }
 }
 
+// Re-pairing points an EXISTING camera at whatever phone is showing the QR.
+//
+// A camera's identity -- its row and its auth account -- is permanent. What is
+// fragile is the login the phone keeps in its own storage, which browsers evict
+// and people clear. Without this, a phone that lost its login had to be paired
+// afresh, minting a second camera and orphaning the first, so one physical
+// camera's history arrived split across two rows that nothing joins. Same row,
+// same history, new handset.
+//
+// The node is not passed: the server reads it from the camera's own row, so
+// re-pairing can never quietly move a camera somewhere else.
+export async function repairCameraPairing(input: {
+  deviceId: string;
+  code: string;
+}): Promise<void> {
+  const code = input.code.trim();
+  if (!input.deviceId) throw new Error("camera required");
+  if (!code) throw new Error("pairing code required");
+  const { data, error } = await supabase().functions.invoke("pair-claim", {
+    body: { code, device_id: input.deviceId },
+  });
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const body = await context.json().catch(() => null);
+      if (body && typeof body === "object" && "error" in body) {
+        throw new Error(String((body as { error: unknown }).error));
+      }
+    }
+    throw error;
+  }
+  if (data && typeof data === "object" && "error" in data && data.error) {
+    throw new Error(String((data as { error: unknown }).error));
+  }
+}
+
 export async function revokeCameraDevice(deviceId: string): Promise<void> {
   const client = supabase();
   const { error } = await client.rpc("org_camera_revoke_device", {
     p_device_id: deviceId,
   });
   if (error) throw error;
+}
+
+// Removing a camera that should never have existed -- paired to the wrong
+// phone, named wrong, never started. The DATABASE decides whether that is
+// allowed: a camera that has recorded anything is refused and must be revoked
+// instead, which stops it at once and keeps everything it measured. The refusal
+// comes back as the server's own sentence, so it says which camera and why.
+// "Delete" hides a camera; it never destroys one. A camera is the parent of
+// everything it measured, so destroying one either takes that history with it
+// or is refused -- and the button people actually want is "stop showing me
+// this", which does not have to touch the data at all.
+//
+// Archiving implies revoking: a camera nobody can see must not still be
+// writing rows. Restoring brings it back REVOKED rather than running, so
+// un-hiding never silently puts a camera back to work in a doorway nobody has
+// looked at since.
+export async function archiveCameraDevice(deviceId: string): Promise<void> {
+  if (!deviceId) throw new Error("camera required");
+  const { error } = await supabase().rpc("org_camera_archive_device", {
+    p_device_id: deviceId,
+  });
+  if (error) throw error;
+}
+
+export async function unarchiveCameraDevice(deviceId: string): Promise<void> {
+  if (!deviceId) throw new Error("camera required");
+  const { error } = await supabase().rpc("org_camera_unarchive_device", {
+    p_device_id: deviceId,
+  });
+  if (error) throw error;
+}
+
+// Only the sysadmin and the CEO can read these at all -- the policy, not this
+// query, is what enforces that. For everyone else it comes back empty.
+export async function listArchivedCameraDevices(nodeId: string): Promise<CameraDevice[]> {
+  const { data, error } = await supabase()
+    .from("camera_devices")
+    .select("*")
+    .not("archived_at", "is", null)
+    .eq("org_node_id", nodeId)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as CameraDevice[];
 }
 
 // Placement after pairing. Until 20260929000000 camera_devices was SELECT-only
