@@ -8,7 +8,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
-import { TouchSelect } from "./TouchSelect";
+import { Select } from "../ui/Select";
 
 const ROLES: CameraDeviceRole[] = [
   "counting",
@@ -95,7 +95,7 @@ export function CreateCameraDeviceDialog({
           </div>
           <div>
             <Label htmlFor="camera-device-role">{t("device.create_role")}</Label>
-            <TouchSelect
+            <Select
               value={role}
               onChange={setRole}
               options={ROLES.map((r) => ({

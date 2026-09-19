@@ -8,7 +8,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label, Textarea } from "../ui/Input";
-import { TouchSelect } from "./TouchSelect";
+import { Select } from "../ui/Select";
 
 interface Props {
   open: boolean;
@@ -102,7 +102,7 @@ export function AssignTaskDialog(props: Props): JSX.Element | null {
         {mySeats.length > 1 && (
           <div>
             <Label htmlFor="work-from">{t("work.from_which_seat")}</Label>
-            <TouchSelect
+            <Select
               id="work-from"
               value={from}
               onChange={(v) => {
@@ -127,7 +127,7 @@ export function AssignTaskDialog(props: Props): JSX.Element | null {
           ) : choices.length === 0 ? (
             <p className="text-sm leading-relaxed text-ink-muted">{t("work.no_reports")}</p>
           ) : (
-            <TouchSelect
+            <Select
               id="work-to"
               value={toId}
               onChange={setToId}

@@ -8,9 +8,11 @@ import {
   getFaceEnrollment,
   getPersonPhotoUrl,
   uploadPersonPhoto,
+  withdrawFace,
 } from "../../services/attendance";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
+import { Input, Label } from "../ui/Input";
 import { Pill } from "../ui/Pill";
 import { Section } from "../ui/Section";
 
@@ -72,6 +74,8 @@ export function FaceEnrollmentPanel({
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [reason, setReason] = useState("");
 
   const enrollment = useQuery({
     queryKey: ["org", "face-enrollment", personId],
@@ -126,6 +130,18 @@ export function FaceEnrollmentPanel({
           : errorMessage(e, t("face.enroll_failed")),
       );
     },
+  });
+
+  const withdraw = useMutation({
+    mutationFn: () => withdrawFace(personId, reason),
+    onSuccess: () => {
+      setError(null);
+      setSaved(false);
+      setWithdrawing(false);
+      setReason("");
+      queryClient.invalidateQueries({ queryKey: ["org", "face-enrollment", personId] });
+    },
+    onError: (e) => setError(errorMessage(e, t("face.withdraw_failed"))),
   });
 
   const label =
@@ -191,6 +207,50 @@ export function FaceEnrollmentPanel({
           </div>
         ) : (
           <p className="text-sm text-ink-muted">{t("face.read_only")}</p>
+        )}
+
+        {/* Biometric data is the one kind here where keeping it is the harm,
+            so removing it is offered beside enrolling it rather than buried. */}
+        {canEnroll && enrollment.data && (
+          <div className="border-t border-border pt-3">
+            {withdrawing ? (
+              <div className="space-y-2">
+                <Label htmlFor="face-withdraw-reason">{t("face.withdraw_reason")}</Label>
+                <Input
+                  id="face-withdraw-reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={t("face.withdraw_reason_placeholder")}
+                  disabled={withdraw.isPending}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={withdraw.isPending || reason.trim().length < 3}
+                    onClick={() => withdraw.mutate()}
+                  >
+                    {withdraw.isPending ? t("common.loading") : t("face.withdraw_confirm")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={withdraw.isPending}
+                    onClick={() => setWithdrawing(false)}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setWithdrawing(true)}>
+                  {t("face.withdraw")}
+                </Button>
+                <p className="mt-1 text-xs text-muted-foreground">{t("face.withdraw_hint")}</p>
+              </>
+            )}
+          </div>
         )}
       </div>
     </Section>

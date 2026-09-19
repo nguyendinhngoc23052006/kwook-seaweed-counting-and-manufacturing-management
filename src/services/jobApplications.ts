@@ -199,3 +199,35 @@ export function applyErrorKey(error: unknown): string {
   if (code === "22023") return "apply.closed";
   return "apply.failed";
 }
+
+// The funnel the app could see and never move. applications.state admits ten
+// values and exactly two transitions were ever written -- the scoring function
+// and org_book_interview_slot -- so nobody could invite, test, offer, hire or
+// turn down a candidate from the running app.
+//
+// The shape lives in the database (org_application_next_states), not here: a
+// copy in the client would be a second rulebook, and the RPC refuses anything
+// the first one does not allow.
+export async function advanceApplication(input: {
+  applicationId: string;
+  state: JobApplicationState;
+  note?: string;
+}): Promise<void> {
+  if (!input.applicationId) throw new Error("application required");
+  const { error } = await supabase().rpc("org_advance_application", {
+    p_application: input.applicationId,
+    p_state: input.state,
+    p_note: input.note?.trim() || null,
+  });
+  if (error) throw error;
+}
+
+export async function applicationNextStates(
+  state: JobApplicationState,
+): Promise<JobApplicationState[]> {
+  const { data, error } = await supabase().rpc("org_application_next_states", {
+    p_state: state,
+  });
+  if (error) throw error;
+  return (data ?? []) as JobApplicationState[];
+}

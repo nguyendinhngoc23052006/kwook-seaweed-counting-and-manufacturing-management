@@ -134,6 +134,33 @@ export interface AttendanceRow {
   unpaired_ins: number;
   unpaired_outs: number;
   on_site: boolean;
+  // True when a human added or voided a punch on this person's day. The hours
+  // beside it are no longer purely what the cameras measured, and a payroll
+  // run has to be able to see that.
+  corrected: boolean;
+}
+
+export interface AttendancePunch {
+  event_id: string | null;
+  adjustment_id: number | null;
+  person_id: string;
+  full_name: string;
+  employee_code: string;
+  kind: "check_in" | "check_out";
+  at: string;
+  source: "camera" | "added";
+  reason: string | null;
+}
+
+export interface VoidedPunch {
+  event_id: string;
+  person_id: string;
+  full_name: string;
+  kind: "check_in" | "check_out";
+  at: string;
+  reason: string;
+  voided_at: string;
+  voided_by: string | null;
 }
 
 export async function fetchAttendanceReport(
@@ -177,6 +204,7 @@ const CSV_HEADER = [
   "unpaired_ins",
   "unpaired_outs",
   "on_site",
+  "corrected",
 ];
 
 function csvField(value: string | number): string {
@@ -204,6 +232,7 @@ export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
         row.unpaired_ins,
         row.unpaired_outs,
         row.on_site ? "true" : "false",
+        row.corrected ? "true" : "false",
       ]
         .map(csvField)
         .join(","),
@@ -211,4 +240,95 @@ export function attendanceRowsToCsv(rows: AttendanceRow[]): string {
   }
   // BOM first so Excel reads Vietnamese names as UTF-8 instead of mojibake.
   return `﻿${lines.join("\r\n")}`;
+}
+
+// The punches behind a report row. Without this a reader could see that a day
+// was wrong and had no way to find out which punch caused it.
+export async function listAttendancePunches(
+  nodeId: string,
+  sinceIso: string,
+  untilIso: string,
+): Promise<AttendancePunch[]> {
+  const { data, error } = await supabase().rpc("org_attendance_punches", {
+    p_node: nodeId,
+    p_since: sinceIso,
+    p_until: untilIso,
+  });
+  if (error) throw error;
+  return (data ?? []) as AttendancePunch[];
+}
+
+// Voided punches stay visible: a correction that made a punch disappear with
+// no trace would be indistinguishable from a camera that never saw it.
+export async function listVoidedPunches(
+  nodeId: string,
+  sinceIso: string,
+  untilIso: string,
+): Promise<VoidedPunch[]> {
+  const { data, error } = await supabase().rpc("org_attendance_voided", {
+    p_node: nodeId,
+    p_since: sinceIso,
+    p_until: untilIso,
+  });
+  if (error) throw error;
+  return (data ?? []) as VoidedPunch[];
+}
+
+// Both corrections are one append to attendance_adjustments. The database
+// decides who may write it (org_guard_attendance_adjustments): never your own
+// attendance, never a punch belonging to someone else, never the future.
+export async function addAttendancePunch(input: {
+  personId: string;
+  nodeId: string;
+  kind: "check_in" | "check_out";
+  at: string;
+  reason: string;
+}): Promise<void> {
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new Error("a reason is required");
+  const { error } = await supabase().from("attendance_adjustments").insert({
+    person_id: input.personId,
+    org_node_id: input.nodeId,
+    action: "add",
+    kind: input.kind,
+    at: input.at,
+    reason,
+  });
+  if (error) throw error;
+}
+
+export async function voidAttendancePunch(input: {
+  personId: string;
+  nodeId: string;
+  eventId: string;
+  reason: string;
+}): Promise<void> {
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new Error("a reason is required");
+  const { error } = await supabase().from("attendance_adjustments").insert({
+    person_id: input.personId,
+    org_node_id: input.nodeId,
+    action: "void",
+    voids_event_id: input.eventId,
+    reason,
+  });
+  if (error) throw error;
+}
+
+// Withdrawing a face. Enrolling again replaces a template; nothing removed
+// one, so somebody enrolled by mistake -- or who has left -- kept a live
+// 128-number biometric record forever and the only offered remedy was to
+// supply another one. A departed person is already excluded from matching, so
+// this is not about recognition: it is about not holding a template nobody has
+// a reason to hold. The rows are deleted, not tombstoned, and the audit keeps
+// that it happened without keeping the numbers.
+export async function withdrawFace(personId: string, reason: string): Promise<number> {
+  if (!personId) throw new Error("person required");
+  if (reason.trim().length < 3) throw new Error("a reason is required");
+  const { data, error } = await supabase().rpc("org_withdraw_face", {
+    p_person_id: personId,
+    p_reason: reason.trim(),
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
 }

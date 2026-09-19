@@ -3,13 +3,13 @@ import { type JSX, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AssignTaskDialog } from "../../components/org/AssignTaskDialog";
 import { TaskCardView } from "../../components/org/TaskCard";
-import { TouchSelect } from "../../components/org/TouchSelect";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
 import { Label, Textarea } from "../../components/ui/Input";
 import { Section } from "../../components/ui/Section";
+import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
@@ -254,7 +254,7 @@ export function WorkPage(): JSX.Element {
             ) : (peers.data ?? []).length === 0 ? (
               <p className="text-sm leading-relaxed text-ink-muted">{t("work.no_peers")}</p>
             ) : (
-              <TouchSelect
+              <Select
                 id="work-peer"
                 value={peerId}
                 onChange={setPeerId}

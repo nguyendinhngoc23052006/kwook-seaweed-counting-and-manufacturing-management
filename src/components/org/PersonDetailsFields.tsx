@@ -70,11 +70,24 @@ interface Props {
   canMaintainProfile: boolean;
   canMaintainBank: boolean;
   disabled: boolean;
+  // Since 20260928000000 a person may change how to reach them, not who they
+  // are on paper: full_name and hire_date are their manager's. Shown read-only
+  // rather than hidden, because "my file says the wrong start date" is only
+  // reportable if you can see the wrong start date.
+  employmentReadOnly?: boolean;
   idPrefix: string;
 }
 
 export function PersonDetailsFields(props: Props): JSX.Element {
-  const { draft, onChange, canMaintainProfile, canMaintainBank, disabled, idPrefix } = props;
+  const {
+    draft,
+    onChange,
+    canMaintainProfile,
+    canMaintainBank,
+    disabled,
+    employmentReadOnly = false,
+    idPrefix,
+  } = props;
   const t = useT();
   const [photoBroken, setPhotoBroken] = useState(false);
 
@@ -88,7 +101,7 @@ export function PersonDetailsFields(props: Props): JSX.Element {
           onChange={(e) => onChange({ fullName: e.target.value })}
           placeholder={t("person_form.full_name_placeholder")}
           autoComplete="off"
-          disabled={disabled}
+          disabled={disabled || employmentReadOnly}
         />
       </div>
 
@@ -124,9 +137,13 @@ export function PersonDetailsFields(props: Props): JSX.Element {
           type="date"
           value={draft.hireDate}
           onChange={(e) => onChange({ hireDate: e.target.value })}
-          disabled={disabled}
+          disabled={disabled || employmentReadOnly}
         />
       </div>
+
+      {employmentReadOnly && (
+        <p className="text-xs text-muted-foreground">{t("person_form.employment_readonly")}</p>
+      )}
 
       <p className="text-xs text-ink-muted">{t("person_form.no_login_hint")}</p>
 
@@ -168,7 +185,7 @@ export function PersonDetailsFields(props: Props): JSX.Element {
                 type="date"
                 value={draft.dateOfBirth}
                 onChange={(e) => onChange({ dateOfBirth: e.target.value })}
-                disabled={disabled}
+                disabled={disabled || employmentReadOnly}
               />
             </div>
             <div>
@@ -177,7 +194,7 @@ export function PersonDetailsFields(props: Props): JSX.Element {
                 id={`${idPrefix}-national-id`}
                 value={draft.nationalId}
                 onChange={(e) => onChange({ nationalId: e.target.value })}
-                disabled={disabled}
+                disabled={disabled || employmentReadOnly}
               />
             </div>
           </div>

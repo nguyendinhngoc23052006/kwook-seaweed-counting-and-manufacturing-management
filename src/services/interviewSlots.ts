@@ -96,3 +96,44 @@ export async function bookInterviewSlot(
   if (error) throw error;
   return data as BookedInterviewSlot;
 }
+
+// The rest of a slot's life. org_add_interview_slots created them and
+// org_book_interview_slot filled one, and nothing else existed: a slot typed
+// with the wrong time stayed wrong, one no longer offered could not be
+// withdrawn, and a candidate booked into the wrong slot could never be
+// released. interview_slots has RLS on with no policies and no grant, so every
+// one of these is a definer RPC, not a new write path.
+export async function updateInterviewSlot(input: {
+  slotId: string;
+  startsAt?: string;
+  endsAt?: string;
+  capacity?: number;
+}): Promise<void> {
+  if (!input.slotId) throw new Error("slot required");
+  const { error } = await supabase().rpc("org_update_interview_slot", {
+    p_slot: input.slotId,
+    p_starts_at: input.startsAt ?? null,
+    p_ends_at: input.endsAt ?? null,
+    p_capacity: input.capacity ?? null,
+  });
+  if (error) throw error;
+}
+
+// Refused while anyone still stands in the slot: the FK is ON DELETE SET NULL,
+// so deleting one out from under a booking would strip the time from a
+// candidate who was told it and never told otherwise.
+export async function removeInterviewSlot(slotId: string): Promise<void> {
+  if (!slotId) throw new Error("slot required");
+  const { error } = await supabase().rpc("org_remove_interview_slot", {
+    p_slot: slotId,
+  });
+  if (error) throw error;
+}
+
+export async function releaseInterviewBooking(applicationId: string): Promise<void> {
+  if (!applicationId) throw new Error("application required");
+  const { error } = await supabase().rpc("org_release_interview_booking", {
+    p_application: applicationId,
+  });
+  if (error) throw error;
+}

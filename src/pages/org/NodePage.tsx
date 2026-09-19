@@ -5,9 +5,9 @@ import { Link, useParams } from "react-router-dom";
 import { AddFieldWorkerDialog } from "../../components/org/AddFieldWorkerDialog";
 import { AssignSeatDialog } from "../../components/org/AssignSeatDialog";
 import { CreatePositionDialog } from "../../components/org/CreatePositionDialog";
+import { EditPositionDialog } from "../../components/org/EditPositionDialog";
 import { MoveNodeDialog } from "../../components/org/MoveNodeDialog";
 import { NodeCapabilityPanel } from "../../components/org/NodeCapabilityPanel";
-import { TouchSelect } from "../../components/org/TouchSelect";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -15,6 +15,7 @@ import { Input, Label } from "../../components/ui/Input";
 import { ListRow, ListRows } from "../../components/ui/ListRow";
 import { Pill } from "../../components/ui/Pill";
 import { Section } from "../../components/ui/Section";
+import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
@@ -36,6 +37,7 @@ import {
   setNodeActive,
   setNodeNature,
 } from "../../services/nodes";
+
 import { listVisiblePersons } from "../../services/people";
 import { listRanks } from "../../services/ranks";
 
@@ -276,6 +278,7 @@ export function NodePage(): JSX.Element {
   const [addFieldWorkerOpen, setAddFieldWorkerOpen] = useState(false);
   const [createPositionOpen, setCreatePositionOpen] = useState(false);
   const [assignSeat, setAssignSeat] = useState<OrgTreeSeat | null>(null);
+  const [editSeat, setEditSeat] = useState<OrgTreeSeat | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [confirmReactivate, setConfirmReactivate] = useState(false);
@@ -571,7 +574,7 @@ export function NodePage(): JSX.Element {
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div className="min-w-56 flex-1">
                 <Label htmlFor="node-nature">{t("orgtree.nature")}</Label>
-                <TouchSelect
+                <Select
                   id="node-nature"
                   value={natureDraft}
                   onChange={(value) => setNatureDraft(value)}
@@ -648,7 +651,7 @@ export function NodePage(): JSX.Element {
             </div>
             <div>
               <Label htmlFor="child-nature">{t("orgtree.child_nature")}</Label>
-              <TouchSelect
+              <Select
                 id="child-nature"
                 value={childNature}
                 onChange={(value) => setChildNature(value)}
@@ -792,11 +795,29 @@ export function NodePage(): JSX.Element {
                         // (frozen writes never block vacate) -- it stays
                         // enabled unconditionally so vacate always stays
                         // reachable.
-                        <Button size="sm" variant="secondary" onClick={() => setAssignSeat(seat)}>
-                          {t("orgtree.manage_seat")}
-                        </Button>
+                        <span className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditSeat(seat)}
+                            disabled={!effectivelyActive}
+                          >
+                            {t("seat_edit.open")}
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => setAssignSeat(seat)}>
+                            {t("orgtree.manage_seat")}
+                          </Button>
+                        </span>
                       ) : (
                         <span className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!effectivelyActive}
+                            onClick={() => setEditSeat(seat)}
+                          >
+                            {t("seat_edit.open")}
+                          </Button>
                           <Button
                             size="sm"
                             variant="primary"
@@ -886,6 +907,19 @@ export function NodePage(): JSX.Element {
           isAdmin={myReach?.isAdmin === true}
           canMaintainProfile={canMaintainProfile}
           canMaintainBank={canMaintainBank}
+        />
+      )}
+
+      {editSeat && (
+        <EditPositionDialog
+          open={true}
+          onClose={() => setEditSeat(null)}
+          onSaved={invalidateAfterSeatWrite}
+          seat={editSeat}
+          nodes={nodes}
+          nodeId={node.id}
+          ranks={ranks.data ?? []}
+          myRankOrdinal={myReach?.isAdmin ? null : (myReach?.rankOrdinal ?? null)}
         />
       )}
 

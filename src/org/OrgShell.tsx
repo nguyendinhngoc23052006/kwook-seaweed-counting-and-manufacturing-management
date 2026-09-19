@@ -7,6 +7,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Clock,
+  Layers,
   LogOut,
   Menu,
   Network,
@@ -65,6 +66,7 @@ function useNavGroups(rootNodeId: string, unread: number): NavGroup[] {
           icon: Building2,
         },
         { to: "/org/chart", match: "/org/chart", label: t("nav.chart"), icon: Network },
+        { to: "/org/ranks", match: "/org/ranks", label: t("nav.ranks"), icon: Layers },
       ],
     },
     {

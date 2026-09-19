@@ -123,3 +123,46 @@
 - Writing and reading in ONE statement (a CTE calling `org_set_capability`
   then counting) sees 0 — same-statement snapshot. Use two statements.
 
+## The lifecycle audit (2026-09-19)
+
+- The shape of almost every gap: **the database allowed the edit and nothing
+  above it ever called it.** Fourteen exported service functions had zero UI
+  callers. Before claiming a feature is missing, check the policy and the
+  grant first — the write path usually already exists.
+- `grep -rl "\bfnName\b" src --include='*.tsx' | wc -l` is the check. Run it
+  after shipping a service function, not before: twice this session I shipped
+  one with no caller (updatePosition/abolishPosition, createRank/updateRank).
+- Deliberate immutability is NOT a gap, and the guards say so in their own
+  error messages. `org_guard_tasks` freezes title/detail/weight/due_at
+  ("fixed at assignment"); `handed_across` is insertable only by the seat
+  currently holding the work; terminal task and application states are
+  terminal. Read the guard before "fixing" one.
+- The org camera stack is half-built: `camera_count_minutes`,
+  `camera_count_events`, `camera_compliance_events` and `camera_operators`
+  have tables, policies and grants and **zero** references in `src/` or the
+  Edge Functions. The floor writes the legacy `count_minutes`/`devices`/
+  `stations`/`lines` stack instead. Do not build UI onto the org counting
+  tables without deciding which stack survives.
+
+## Verifying against the database — traps hit this session
+
+- `reset request.jwt.claims` leaves `''`, which `::json` rejects inside every
+  guard. Hit twice. Symptom: the statement raises, the transaction continues,
+  and a LATER select reports the OLD value as though the write succeeded.
+  Always read the row back before trusting a before/after measurement.
+- A `begin;` in a psql `-f` script with no `commit;` is rolled back at EOF, so
+  a fixture built that way vanishes and every later assertion silently tests
+  an empty database.
+- `x = any ((select arr from cte))` is parsed as the SUBQUERY form of ANY and
+  compares `uuid = uuid[]`. Hold the array in a plpgsql variable, or inline
+  the function call.
+- Writing and reading in ONE statement (a CTE that calls a writing function,
+  then counts) sees the pre-write snapshot. Use two statements.
+- A test that refuses for the WRONG reason proves nothing: capacity 0 hit an
+  "at least one" check before ever reaching the booked-count branch it was
+  written to exercise. Read the error text, not just the refusal.
+- When grepping a function definition across all migrations, the FIRST match
+  is usually the oldest. `org_attendance_rows` was rebuilt from the
+  pre-hardening copy that way and nearly reverted the 16-hour edge window and
+  the `on_site` column. Find every file defining it first.
+
