@@ -1,9 +1,11 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "cmdk";
 import { Check, ChevronDown } from "lucide-react";
-import { type JSX, useState } from "react";
+import { type JSX, type ReactNode, useState } from "react";
 import { useT } from "../../lib/i18n";
+import { useMediaQuery } from "../../lib/useMediaQuery";
 import { cn } from "../../lib/utils";
+import { DialogContent, DialogRoot, DialogTitle } from "./Dialog";
 
 export interface SelectOption<T extends string = string> {
   value: T;
@@ -24,10 +26,9 @@ export interface SelectProps<T extends string = string> {
   searchable?: boolean;
 }
 
-// Radix Popover + cmdk. Replaces two hand-rolled listboxes (this one and
-// org/TouchSelect) that each re-implemented outside-click, window-resize
-// repositioning and arrow-key navigation, and neither of which announced
-// itself to a screen reader.
+const triggerClass =
+  "inline-flex min-h-12 w-full items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 py-2.5 text-base text-foreground shadow-sm outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60";
+
 export function Select<T extends string = string>({
   value,
   onChange,
@@ -41,7 +42,86 @@ export function Select<T extends string = string>({
 }: SelectProps<T>): JSX.Element {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.value === value);
+  // A small anchored popover is lost on a phone screen in a workshop, so below
+  // sm the same list opens as a centred dialog instead. One component, two
+  // presentations -- this is what org/TouchSelect used to be, and why.
+  const isDesktop = useMediaQuery("(min-width: 640px)");
+
+  const selected = options.find((option) => option.value === value);
+  const label = selected?.label ?? placeholder ?? t("common.select_placeholder");
+
+  const list: ReactNode = (
+    <Command loop>
+      {searchable && (
+        <div className="mb-1 border-b border-border px-2 pb-1">
+          <CommandInput
+            placeholder={t("common.search_placeholder")}
+            className="min-h-11 w-full bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      )}
+      <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain sm:max-h-60">
+        <CommandEmpty className="px-3 py-6 text-center text-sm text-muted-foreground">
+          {t("common.no_results")}
+        </CommandEmpty>
+        <CommandGroup>
+          {options.map((option) => (
+            <CommandItem
+              key={option.value}
+              // cmdk filters on `value`; two options sharing a label would
+              // otherwise collapse into one row while searching.
+              value={`${option.label}\u0000${option.value}`}
+              disabled={option.disabled}
+              title={option.title}
+              onSelect={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 text-base text-foreground outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
+            >
+              <Check
+                className={cn(
+                  "size-4 shrink-0",
+                  option.value === value ? "opacity-100" : "opacity-0",
+                )}
+              />
+              <span className="truncate">{option.label}</span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  );
+
+  const triggerBody = (
+    <>
+      <span className={cn("truncate text-left", !selected && "text-muted-foreground")}>
+        {label}
+      </span>
+      <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+    </>
+  );
+
+  if (!isDesktop) {
+    return (
+      <DialogRoot open={open} onOpenChange={setOpen}>
+        <button
+          type="button"
+          id={id}
+          aria-label={ariaLabel}
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+          className={cn(triggerClass, className)}
+        >
+          {triggerBody}
+        </button>
+        <DialogContent className="p-2">
+          <DialogTitle className="sr-only">{ariaLabel ?? label}</DialogTitle>
+          {list}
+        </DialogContent>
+      </DialogRoot>
+    );
+  }
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -49,18 +129,10 @@ export function Select<T extends string = string>({
         id={id}
         aria-label={ariaLabel}
         disabled={disabled}
-        className={cn(
-          "inline-flex min-h-12 w-full items-center justify-between gap-2 rounded-lg border border-input bg-card px-3 py-2.5 text-base text-foreground shadow-sm outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60",
-          !selected && "text-muted-foreground",
-          className,
-        )}
+        className={cn(triggerClass, className)}
       >
-        <span className="truncate text-left">
-          {selected?.label ?? placeholder ?? t("common.select_placeholder")}
-        </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        {triggerBody}
       </PopoverPrimitive.Trigger>
-
       <PopoverPrimitive.Portal>
         {/* --radix-popover-trigger-width matches the panel to the field; the
             version this replaces measured it by hand on every window resize. */}
@@ -69,44 +141,7 @@ export function Select<T extends string = string>({
           sideOffset={4}
           className="z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
-          <Command loop>
-            {searchable && (
-              <div className="mb-1 border-b border-border px-2 pb-1">
-                <CommandInput
-                  placeholder={t("common.search_placeholder")}
-                  className="min-h-11 w-full bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
-                />
-              </div>
-            )}
-            <CommandList className="max-h-60 overflow-y-auto overscroll-contain">
-              <CommandEmpty className="px-3 py-6 text-center text-sm text-muted-foreground">
-                {t("common.no_results")}
-              </CommandEmpty>
-              <CommandGroup>
-                {options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.label}
-                    disabled={option.disabled}
-                    title={option.title}
-                    onSelect={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
-                    className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 text-base text-foreground outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
-                  >
-                    <Check
-                      className={cn(
-                        "size-4 shrink-0",
-                        option.value === value ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    <span className="truncate">{option.label}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+          {list}
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

@@ -1,13 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { TouchSelect } from "../../components/org/TouchSelect";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
 import { Input, Label } from "../../components/ui/Input";
 import { Pill } from "../../components/ui/Pill";
 import { Section } from "../../components/ui/Section";
+import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { vietnamDayStartIso } from "../../lib/dates";
 import { errorMessage } from "../../lib/errorMessage";
@@ -18,6 +18,7 @@ import {
   exportAttendance,
   fetchAttendanceReport,
 } from "../../services/attendance";
+
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import { getOrgTree, isNodeEffectivelyActive, type OrgTreeNode } from "../../services/nodes";
 
@@ -205,7 +206,7 @@ export function AttendancePage(): JSX.Element {
       <Section title={t("attendance.unit")}>
         <div className="flex flex-wrap items-end gap-3 py-2">
           <div className="min-w-56 flex-1">
-            <TouchSelect
+            <Select
               ariaLabel={t("attendance.unit")}
               searchable
               value={nodeId}

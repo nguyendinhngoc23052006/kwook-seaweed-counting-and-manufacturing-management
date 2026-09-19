@@ -27,8 +27,8 @@ import { Input, Label } from "../ui/Input";
 import { ListRow, ListRows } from "../ui/ListRow";
 import { Pill } from "../ui/Pill";
 import { Section } from "../ui/Section";
+import { Select } from "../ui/Select";
 import { ListSkeleton } from "../ui/Skeleton";
-import { TouchSelect } from "./TouchSelect";
 
 interface Props {
   nodeId: string;
@@ -355,7 +355,7 @@ export function NodeCapabilityPanel(props: Props): JSX.Element {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="caps-subtree-key">{t("caps.subtree_capability")}</Label>
-              <TouchSelect
+              <Select
                 id="caps-subtree-key"
                 value={subtreeKey}
                 onChange={(value) => {
@@ -374,7 +374,7 @@ export function NodeCapabilityPanel(props: Props): JSX.Element {
             </div>
             <div>
               <Label htmlFor="caps-subtree-action">{t("caps.subtree_action")}</Label>
-              <TouchSelect
+              <Select
                 id="caps-subtree-action"
                 value={subtreeAction}
                 onChange={(value) => {

@@ -16,6 +16,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
+import { Select } from "../ui/Select";
 import {
   bankPatchOf,
   emptyPersonDraft,
@@ -23,7 +24,6 @@ import {
   profilePatchOf,
 } from "./PersonDetailsFields";
 import { type OccupantMode, SeatOccupantFields } from "./SeatOccupantFields";
-import { TouchSelect } from "./TouchSelect";
 
 interface Props {
   open: boolean;
@@ -246,7 +246,7 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
 
         <div>
           <Label htmlFor="position-manager">{t("seat.reports_to")}</Label>
-          <TouchSelect
+          <Select
             id="position-manager"
             value={managerPositionId}
             onChange={(value) => setManagerPositionId(value)}
@@ -273,7 +273,7 @@ export function CreatePositionDialog(props: Props): JSX.Element | null {
 
         <div>
           <Label htmlFor="position-rank">{t("seat.rank")}</Label>
-          <TouchSelect
+          <Select
             id="position-rank"
             value={rankValue}
             onChange={(value) => setRankKey(value)}

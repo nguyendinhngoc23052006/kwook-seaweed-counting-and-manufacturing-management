@@ -15,6 +15,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Label } from "../ui/Input";
+import { Select } from "../ui/Select";
 import {
   bankPatchOf,
   emptyPersonDraft,
@@ -22,7 +23,6 @@ import {
   type PersonDraft,
   profilePatchOf,
 } from "./PersonDetailsFields";
-import { TouchSelect } from "./TouchSelect";
 
 interface Props {
   open: boolean;
@@ -189,7 +189,7 @@ export function AddFieldWorkerDialog(props: Props): JSX.Element | null {
 
         <div className="border-t border-hairline pt-4">
           <Label htmlFor="field-worker-manager">{t("seat.reports_to")}</Label>
-          <TouchSelect
+          <Select
             id="field-worker-manager"
             value={managerPositionId}
             onChange={(value) => setManagerPositionId(value)}
@@ -216,7 +216,7 @@ export function AddFieldWorkerDialog(props: Props): JSX.Element | null {
 
         <div>
           <Label htmlFor="field-worker-rank">{t("seat.rank")}</Label>
-          <TouchSelect
+          <Select
             id="field-worker-rank"
             value={rankValue}
             onChange={(value) => setRankKey(value)}

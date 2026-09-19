@@ -15,7 +15,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Label } from "../ui/Input";
-import { TouchSelect } from "./TouchSelect";
+import { Select } from "../ui/Select";
 
 interface Props {
   open: boolean;
@@ -80,7 +80,7 @@ export function MoveNodeDialog(props: Props): JSX.Element | null {
 
         <div>
           <Label htmlFor="move-parent">{t("orgtree.move_new_parent")}</Label>
-          <TouchSelect
+          <Select
             id="move-parent"
             value={parentId}
             onChange={(value) => setParentId(value)}
@@ -93,7 +93,7 @@ export function MoveNodeDialog(props: Props): JSX.Element | null {
               // inactive (20260924000000_freeze_inactive_subtrees.sql) --
               // kept in the list rather than dropped so an admin can still
               // see the branch exists and why it's unavailable, per
-              // TouchSelect's per-option disabled support.
+              // Select's per-option disabled support.
               ...choices.map((choice) => {
                 const choiceActive = isNodeEffectivelyActive(nodes, choice.id);
                 const label = breadcrumbOf(nodes, choice.id)

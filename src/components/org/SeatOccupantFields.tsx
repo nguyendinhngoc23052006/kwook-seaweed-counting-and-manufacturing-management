@@ -6,9 +6,9 @@ import { listVisiblePersons } from "../../services/people";
 import { Button } from "../ui/Button";
 import { Empty, ErrorState } from "../ui/EmptyState";
 import { Label } from "../ui/Input";
+import { Select } from "../ui/Select";
 import { ListSkeleton } from "../ui/Skeleton";
 import { PersonDetailsFields, type PersonDraft } from "./PersonDetailsFields";
-import { TouchSelect } from "./TouchSelect";
 
 export type OccupantMode = "none" | "existing" | "new";
 
@@ -106,7 +106,7 @@ export function SeatOccupantFields(props: Props): JSX.Element {
         ) : (
           <div>
             <Label htmlFor={`${idPrefix}-person`}>{t("assign.person")}</Label>
-            <TouchSelect
+            <Select
               id={`${idPrefix}-person`}
               value={personId}
               onChange={onPersonIdChange}

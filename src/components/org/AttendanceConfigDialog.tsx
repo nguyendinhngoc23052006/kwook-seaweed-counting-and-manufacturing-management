@@ -9,7 +9,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label } from "../ui/Input";
-import { TouchSelect } from "./TouchSelect";
+import { Select } from "../ui/Select";
 
 function NumberField({
   id,
@@ -125,7 +125,7 @@ export function AttendanceConfigDialog({
       <div className="space-y-4">
         <div>
           <Label htmlFor="attendance-facing">{t("attendance_config.facing")}</Label>
-          <TouchSelect
+          <Select
             id="attendance-facing"
             value={facing}
             onChange={setFacing}

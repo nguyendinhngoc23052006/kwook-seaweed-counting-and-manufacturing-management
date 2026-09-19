@@ -13,7 +13,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Input, Label, Textarea } from "../ui/Input";
-import { TouchSelect } from "./TouchSelect";
+import { Select } from "../ui/Select";
 
 interface Props {
   open: boolean;
@@ -175,7 +175,7 @@ export function JobPostingDialog(props: Props): JSX.Element | null {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="job-type">{t("jobs.employment_type")}</Label>
-            <TouchSelect
+            <Select
               id="job-type"
               value={draft.employmentType}
               onChange={(v) => set("employmentType", v as JobEmploymentType)}
