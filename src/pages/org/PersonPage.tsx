@@ -19,6 +19,7 @@ import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
+import { archiveEntity } from "../../services/archive";
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import {
   attachAccount,
@@ -146,6 +147,13 @@ export function PersonPage(): JSX.Element {
       queryClient.invalidateQueries({ queryKey: ["org", "unattached-accounts"] });
     },
     onError: (e) => setError(errorMessage(e, t("person_page.account_failed"))),
+  });
+
+  const hide = useMutation({
+    mutationFn: () => archiveEntity("person", personId as string),
+    // Back to the unit: this person's own page is the one screen that can no
+    // longer load once they are hidden.
+    onSuccess: () => window.location.replace(`/org/node/${nodeId}/people`),
   });
 
   const save = useMutation({
@@ -276,6 +284,35 @@ export function PersonPage(): JSX.Element {
               )}
             </div>
             <p className="text-xs text-muted-foreground">{t("person_page.status_hint")}</p>
+
+            {/* Departing is the employment fact and it stays on the record.
+                Hiding is about not wanting to see them in lists any more, and
+                it changes nothing they ever did -- every hour worked, every
+                check-in, every task stays exactly where it is. */}
+            {p.status === "departed" && (
+              <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={hide.isPending}
+                  onClick={() => {
+                    if (window.confirm(t("archive.confirm", { name: p.full_name }))) {
+                      hide.mutate();
+                    }
+                  }}
+                >
+                  {t("archive.delete")}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {t("person_page.delete_hint")}
+                </span>
+                {hide.isError && (
+                  <span className="text-xs text-danger">
+                    {errorMessage(hide.error, t("archive.failed"))}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Only the sysadmin or the CEO may link or unlink an account --
                 org_guard_persons refuses everyone else, so the control is not

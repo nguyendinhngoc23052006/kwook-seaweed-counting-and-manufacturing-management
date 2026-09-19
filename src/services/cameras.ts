@@ -21,6 +21,9 @@ export async function listCameraDevices(nodeId: string): Promise<CameraDevice[]>
   return (data ?? []) as CameraDevice[];
 }
 
+// Archived stations come back here as well: the read policy hands them only to
+// the sysadmin and the CEO, and the panel puts them in their own collapsed
+// list rather than mixing them into the live one.
 export async function listCameraStations(nodeId: string): Promise<CameraStation[]> {
   const client = supabase();
   const { data, error } = await client

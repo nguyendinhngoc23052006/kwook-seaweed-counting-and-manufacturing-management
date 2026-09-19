@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
+import { archiveEntity, unarchiveEntity } from "../../services/archive";
 import {
   createCameraStation,
   listCameraStations,
@@ -17,6 +18,7 @@ import { Pill } from "../ui/Pill";
 import { Section } from "../ui/Section";
 import { Select } from "../ui/Select";
 import { ListSkeleton } from "../ui/Skeleton";
+import { ArchivedDisclosure } from "./ArchivedDisclosure";
 
 const KINDS: CameraDeviceRole[] = ["counting", "compliance", "overview", "provisioning"];
 
@@ -65,7 +67,22 @@ export function CameraStationsPanel({
     onError: (e) => setError(errorMessage(e, t("station.update_failed"))),
   });
 
-  const rows = stations.data ?? [];
+  // Hiding, not destroying. A retired station keeps every count filed against
+  // it; this only stops it being listed, and an admin can bring it back.
+  const hide = useMutation({
+    mutationFn: (id: string) => archiveEntity("camera_station", id),
+    onSuccess: refresh,
+    onError: (e) => setError(errorMessage(e, t("archive.failed"))),
+  });
+
+  const restore = useMutation({
+    mutationFn: (id: string) => unarchiveEntity("camera_station", id),
+    onSuccess: refresh,
+    onError: (e) => setError(errorMessage(e, t("archive.restore_failed"))),
+  });
+
+  const rows = (stations.data ?? []).filter((s) => !s.archived_at);
+  const hidden = (stations.data ?? []).filter((s) => s.archived_at);
 
   return (
     <Section title={t("station.title")} description={t("station.hint")}>
@@ -86,19 +103,49 @@ export function CameraStationsPanel({
                 meta={!s.active ? <Pill tone="neutral">{t("station.retired")}</Pill> : undefined}
                 trailing={
                   canManage ? (
-                    <Button
-                      size="sm"
-                      variant={s.active ? "ghost" : "secondary"}
-                      disabled={toggle.isPending}
-                      onClick={() => toggle.mutate({ id: s.id, active: !s.active })}
-                    >
-                      {s.active ? t("station.retire") : t("station.restore")}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={s.active ? "ghost" : "secondary"}
+                        disabled={toggle.isPending}
+                        onClick={() => toggle.mutate({ id: s.id, active: !s.active })}
+                      >
+                        {s.active ? t("station.retire") : t("station.restore")}
+                      </Button>
+                      {/* Offered once it is retired: stop it first, then stop
+                          looking at it. */}
+                      {!s.active && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={hide.isPending}
+                          onClick={() => {
+                            if (window.confirm(t("archive.confirm", { name: s.name }))) {
+                              hide.mutate(s.id);
+                            }
+                          }}
+                        >
+                          {t("archive.delete")}
+                        </Button>
+                      )}
+                    </div>
                   ) : undefined
                 }
               />
             ))}
           </ListRows>
+        )}
+
+        {canManage && (
+          <ArchivedDisclosure
+            rows={hidden.map((s) => ({
+              id: s.id,
+              title: s.name,
+              subtitle: `${s.line_name} · ${t(`device.role_${s.kind}`)}`,
+            }))}
+            onRestore={(id) => restore.mutate(id)}
+            restoring={restore.isPending}
+          />
         )}
 
         {canManage && (

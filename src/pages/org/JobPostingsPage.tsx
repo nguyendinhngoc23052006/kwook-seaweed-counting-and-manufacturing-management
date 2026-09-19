@@ -14,6 +14,7 @@ import { ListSkeleton } from "../../components/ui/Skeleton";
 import { endOfDayIso } from "../../lib/dates";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
+import { archiveEntity } from "../../services/archive";
 import { getMyCapabilityReach } from "../../services/capabilities";
 import { getApplicationCounts } from "../../services/jobApplications";
 import {
@@ -208,6 +209,25 @@ export function JobPostingsPage(): JSX.Element {
                         {t("jobs.discard")}
                       </Button>
                     </>
+                  )}
+                  {/* Closed and filled are both finished, and both are history
+                      worth keeping -- the applications still point at the
+                      posting. Hiding takes it off this list and, because
+                      org_job_board() filters on it too, off the public careers
+                      site in the same instant. */}
+                  {(job.state === "closed" || job.state === "filled") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={act.isPending}
+                      onClick={() => {
+                        if (window.confirm(t("archive.confirm", { name: job.title }))) {
+                          act.mutate(() => archiveEntity("job_posting", job.id));
+                        }
+                      }}
+                    >
+                      {t("archive.delete")}
+                    </Button>
                   )}
                   {job.state === "open" && (
                     <>
