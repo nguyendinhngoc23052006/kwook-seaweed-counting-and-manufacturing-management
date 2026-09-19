@@ -81,9 +81,7 @@ Deno.serve(async (req) => {
   }
   const callerId = userData.user.id;
 
-  const { code, name, role, node_id, station_id, device_id } = await req
-    .json()
-    .catch(() => ({}));
+  const { code, name, role, node_id, station_id, device_id } = await req.json().catch(() => ({}));
   if (typeof code !== "string" || code.length < 32) return reply(400, { error: "Bad code" });
 
   const isRepair = typeof device_id === "string" && device_id.length > 0;
@@ -152,7 +150,9 @@ Deno.serve(async (req) => {
     deviceId = device_id;
     const { data: account, error: accountError } = await service.auth.admin.getUserById(deviceId);
     if (accountError || !account.user?.email) {
-      return reply(500, { error: `Could not read that camera's account: ${accountError?.message}` });
+      return reply(500, {
+        error: `Could not read that camera's account: ${accountError?.message}`,
+      });
     }
     email = account.user.email;
     rollback = (message, status = 500) => Promise.resolve(reply(status, { error: message }));

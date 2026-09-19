@@ -14,7 +14,12 @@ import { Pill } from "../../components/ui/Pill";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
-import { listCameraDevices, restoreCameraDevice, revokeCameraDevice } from "../../services/cameras";
+import {
+  deleteCameraDevice,
+  listCameraDevices,
+  restoreCameraDevice,
+  revokeCameraDevice,
+} from "../../services/cameras";
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import type { CameraDevice } from "../../types/camera";
 
@@ -38,6 +43,7 @@ function DeviceRow({
   onEdit,
   onRepair,
   onRestore,
+  onDelete,
   t,
 }: {
   d: CameraDevice;
@@ -48,6 +54,7 @@ function DeviceRow({
   onEdit?: (d: CameraDevice) => void;
   onRepair?: (d: CameraDevice) => void;
   onRestore?: (id: string) => void;
+  onDelete?: (d: CameraDevice) => void;
   t: ReturnType<typeof useT>;
 }): JSX.Element {
   const h = health(d.last_seen_at);
@@ -93,6 +100,16 @@ function DeviceRow({
             {t("repair.button")}
           </Button>
         )}
+        {canManage && d.revoked_at && onDelete && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="whitespace-nowrap"
+            onClick={() => onDelete(d)}
+          >
+            {t("device.delete")}
+          </Button>
+        )}
         {canManage && d.revoked_at && onRestore && (
           <Button
             size="sm"
@@ -127,11 +144,13 @@ function RevokedDevicesDisclosure({
   devices,
   canManage,
   onRestore,
+  onDelete,
   t,
 }: {
   devices: CameraDevice[];
   canManage: boolean;
   onRestore: (id: string) => void;
+  onDelete: (d: CameraDevice) => void;
   t: ReturnType<typeof useT>;
 }): JSX.Element | null {
   const [open, setOpen] = useState(false);
@@ -150,6 +169,7 @@ function RevokedDevicesDisclosure({
               d={d}
               canManage={canManage}
               onRestore={onRestore}
+              onDelete={onDelete}
               onRevoke={() => {}}
               revoking={false}
               t={t}
@@ -222,6 +242,17 @@ export function CamerasPage(): JSX.Element {
       }),
   });
 
+  // The database decides whether this is allowed: a camera that recorded
+  // anything is refused and must stay revoked instead. Its refusal is a whole
+  // sentence naming the camera, so it is shown as-is rather than replaced.
+  const remove = useMutation({
+    mutationFn: (deviceId: string) => deleteCameraDevice(deviceId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ["cameras", "devices", nodeId ?? null],
+      }),
+  });
+
   if (reach.isLoading) {
     return <ListSkeleton rows={3} label={t("common.loading")} />;
   }
@@ -277,6 +308,11 @@ export function CamerasPage(): JSX.Element {
             devices={revokedRows}
             canManage={canManage}
             onRestore={(id) => restore.mutate(id)}
+            onDelete={(device) => {
+              if (window.confirm(t("device.delete_confirm", { name: device.name }))) {
+                remove.mutate(device.id);
+              }
+            }}
             t={t}
           />
         </>
@@ -284,6 +320,10 @@ export function CamerasPage(): JSX.Element {
 
       {revoke.isError && (
         <Alert variant="error">{errorMessage(revoke.error, t("device.revoke_failed"))}</Alert>
+      )}
+
+      {remove.isError && (
+        <Alert variant="error">{errorMessage(remove.error, t("device.delete_failed"))}</Alert>
       )}
 
       {nodeId && (

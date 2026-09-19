@@ -139,6 +139,19 @@ export async function revokeCameraDevice(deviceId: string): Promise<void> {
   if (error) throw error;
 }
 
+// Removing a camera that should never have existed -- paired to the wrong
+// phone, named wrong, never started. The DATABASE decides whether that is
+// allowed: a camera that has recorded anything is refused and must be revoked
+// instead, which stops it at once and keeps everything it measured. The refusal
+// comes back as the server's own sentence, so it says which camera and why.
+export async function deleteCameraDevice(deviceId: string): Promise<void> {
+  if (!deviceId) throw new Error("camera required");
+  const { error } = await supabase().rpc("org_camera_delete_device", {
+    p_device_id: deviceId,
+  });
+  if (error) throw error;
+}
+
 // Placement after pairing. Until 20260929000000 camera_devices was SELECT-only
 // to every client with no write policy at all, so a camera's name, role,
 // station and unit were frozen at creation and the only way to move a camera
