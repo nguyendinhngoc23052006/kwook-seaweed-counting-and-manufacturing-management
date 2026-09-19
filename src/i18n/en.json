@@ -742,5 +742,15 @@
   "unitsettings.nature_hint": "Leave it inheriting and it follows the nearest unit above that sets one.",
   "unitsettings.archive": "Archive this unit",
   "unitsettings.reactivate": "Bring this unit back",
-  "unitsettings.archive_hint": "Archiving keeps everything and takes authority away: seats inside an archived unit carry no capabilities until it is brought back."
+  "unitsettings.archive_hint": "Archiving keeps everything and takes authority away: seats inside an archived unit carry no capabilities until it is brought back.",
+  "applicants.advance_failed": "Could not move that application.",
+  "applicants.reason": "Reason",
+  "applicants.reason_placeholder": "Why this candidate is not going forward",
+  "applicants.move_invited": "Invite",
+  "applicants.move_tested": "Mark as tested",
+  "applicants.move_interviewing": "Interviewing",
+  "applicants.move_offered": "Make an offer",
+  "applicants.move_hired": "Hire",
+  "applicants.move_not_selected": "Turn down",
+  "applicants.move_withdrawn": "Withdrew"
 }

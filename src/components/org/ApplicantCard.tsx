@@ -1,8 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
+import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
-import { getApplicationDetail, type JobApplication } from "../../services/jobApplications";
+import {
+  advanceApplication,
+  applicationNextStates,
+  getApplicationDetail,
+  type JobApplication,
+  type JobApplicationState,
+} from "../../services/jobApplications";
+import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
+import { Input, Label } from "../ui/Input";
 import { Pill } from "../ui/Pill";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -28,13 +37,43 @@ function Answer({ label, value }: { label: string; value: string }) {
 // applicants stays a list of names rather than megabytes of prose.
 export function ApplicantCard({ a }: { a: JobApplication }): JSX.Element {
   const t = useT();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const detail = useQuery({
     queryKey: ["jobs", "applicant", a.id],
     queryFn: () => getApplicationDetail(a.id),
     enabled: open,
   });
+
+  // The funnel's shape is the database's (org_application_next_states), asked
+  // for rather than copied: a second rulebook in the client would drift, and
+  // the RPC refuses anything the first one does not allow regardless.
+  const next = useQuery({
+    queryKey: ["jobs", "next-states", a.state],
+    queryFn: () => applicationNextStates(a.state),
+  });
+
+  const advance = useMutation({
+    mutationFn: (state: JobApplicationState) =>
+      advanceApplication({ applicationId: a.id, state, note }),
+    onSuccess: () => {
+      setError(null);
+      setNote("");
+      queryClient.invalidateQueries({ queryKey: ["jobs", "applications"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "closed-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "closed-applications-count"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs", "application-counts"] });
+    },
+    onError: (e) => setError(errorMessage(e, t("applicants.advance_failed"))),
+  });
+
+  const moves = next.data ?? [];
+  // Turning somebody down is the one move that owes a reason, and the database
+  // refuses it without one -- so the field appears only when it is needed.
+  const needsNote = (state: JobApplicationState) => state === "not_selected";
 
   return (
     <article className="rounded-lg border border-hairline bg-surface-raised p-4">
@@ -47,6 +86,12 @@ export function ApplicantCard({ a }: { a: JobApplication }): JSX.Element {
           <Pill>{t(`applicants.state_${a.state}`)}</Pill>
         </div>
       </div>
+
+      {error && (
+        <Alert variant="error" className="mt-2">
+          {error}
+        </Alert>
+      )}
 
       <dl className="mt-2 grid gap-2 sm:grid-cols-3">
         <Field label={t("apply.phone")} value={a.phone} />
@@ -119,6 +164,42 @@ export function ApplicantCard({ a }: { a: JobApplication }): JSX.Element {
             </div>
           )}
         </>
+      )}
+
+      {moves.length > 0 && (
+        <div className="mt-3 border-t border-border pt-3">
+          {moves.some(needsNote) && (
+            <div className="mb-2">
+              <Label htmlFor={`applicant-note-${a.id}`}>{t("applicants.reason")}</Label>
+              <Input
+                id={`applicant-note-${a.id}`}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t("applicants.reason_placeholder")}
+                disabled={advance.isPending}
+              />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {moves.map((state) => (
+              <Button
+                key={state}
+                size="sm"
+                variant={
+                  state === "hired"
+                    ? "primary"
+                    : state === "not_selected" || state === "withdrawn"
+                      ? "danger"
+                      : "secondary"
+                }
+                disabled={advance.isPending || (needsNote(state) && note.trim().length < 3)}
+                onClick={() => advance.mutate(state)}
+              >
+                {t(`applicants.move_${state}`)}
+              </Button>
+            ))}
+          </div>
+        </div>
       )}
     </article>
   );

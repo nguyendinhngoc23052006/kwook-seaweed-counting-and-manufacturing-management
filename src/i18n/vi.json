@@ -742,5 +742,15 @@
   "unitsettings.nature_hint": "Để trống thì theo đơn vị gần nhất phía trên có đặt loại.",
   "unitsettings.archive": "Lưu trữ đơn vị này",
   "unitsettings.reactivate": "Mở lại đơn vị này",
-  "unitsettings.archive_hint": "Lưu trữ giữ nguyên mọi thứ và thu hồi quyền: các vị trí trong đơn vị đã lưu trữ không còn quyền hạn cho tới khi mở lại."
+  "unitsettings.archive_hint": "Lưu trữ giữ nguyên mọi thứ và thu hồi quyền: các vị trí trong đơn vị đã lưu trữ không còn quyền hạn cho tới khi mở lại.",
+  "applicants.advance_failed": "Không chuyển được hồ sơ.",
+  "applicants.reason": "Lý do",
+  "applicants.reason_placeholder": "Vì sao ứng viên này không đi tiếp",
+  "applicants.move_invited": "Mời",
+  "applicants.move_tested": "Đã kiểm tra",
+  "applicants.move_interviewing": "Đang phỏng vấn",
+  "applicants.move_offered": "Gửi đề nghị",
+  "applicants.move_hired": "Nhận việc",
+  "applicants.move_not_selected": "Từ chối",
+  "applicants.move_withdrawn": "Tự rút"
 }
