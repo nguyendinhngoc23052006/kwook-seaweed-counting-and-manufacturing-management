@@ -317,6 +317,8 @@
   "firstrun.failed": "Could not create the first unit.",
   "firstrun.name_label": "Company or top unit name",
   "firstrun.name_placeholder": "Kwook",
+  "firstrun.no_access_body": "This account is signed in but is not linked to anyone in the organisation, so there is nothing it can see. If this is a phone you meant to turn into a camera, sign out and open /pair on it instead.",
+  "firstrun.no_access_title": "Nothing here for this account",
   "firstrun.not_ready_body": "This organisation has not been created yet. An administrator has to add the top unit before anyone else can be placed in it.",
   "firstrun.not_ready_title": "Not set up yet",
   "firstrun.title": "Set up your organisation",

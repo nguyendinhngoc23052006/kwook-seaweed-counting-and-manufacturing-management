@@ -317,6 +317,8 @@
   "firstrun.failed": "Không tạo được đơn vị đầu tiên.",
   "firstrun.name_label": "Tên công ty hoặc đơn vị cao nhất",
   "firstrun.name_placeholder": "Kwook",
+  "firstrun.no_access_body": "Tài khoản này đã đăng nhập nhưng chưa được liên kết với ai trong tổ chức, nên không có gì để xem. Nếu đây là điện thoại bạn định biến thành camera, hãy đăng xuất và mở /pair trên máy đó.",
+  "firstrun.no_access_title": "Không có gì ở đây cho tài khoản này",
   "firstrun.not_ready_body": "Tổ chức này chưa được tạo. Quản trị viên cần tạo đơn vị cao nhất trước khi có thể xếp người vào.",
   "firstrun.not_ready_title": "Chưa được thiết lập",
   "firstrun.title": "Thiết lập tổ chức của bạn",
