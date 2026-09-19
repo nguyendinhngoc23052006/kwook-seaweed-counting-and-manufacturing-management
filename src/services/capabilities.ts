@@ -19,7 +19,8 @@ export type CapabilityKey =
   | "manage_camera_devices"
   | "view_camera_data"
   | "view_attendance_below"
-  | "enroll_own_face";
+  | "enroll_own_face"
+  | "correct_attendance";
 
 export interface CapabilityType {
   key: CapabilityKey;
@@ -205,6 +206,7 @@ const REACH_QUERIES: { key: CapabilityKey; strict: boolean }[] = [
   { key: "view_camera_data", strict: false },
   { key: "view_attendance_below", strict: false },
   { key: "enroll_own_face", strict: false },
+  { key: "correct_attendance", strict: false },
 ];
 
 export async function getMyCapabilityReach(): Promise<CapabilityReach> {

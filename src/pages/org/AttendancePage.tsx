@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { AttendanceCorrectionDialog } from "../../components/org/AttendanceCorrectionDialog";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -80,9 +81,11 @@ function downloadCsv(rows: AttendanceRow[], fileName: string): void {
 function AttendanceTable({
   rows,
   t,
+  onCorrect,
 }: {
   rows: AttendanceRow[];
   t: ReturnType<typeof useT>;
+  onCorrect: ((row: AttendanceRow) => void) | null;
 }): JSX.Element {
   return (
     <div className="overflow-x-auto">
@@ -104,6 +107,11 @@ function AttendanceTable({
             <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_hours")}</th>
             <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_ins")}</th>
             <th className="whitespace-nowrap py-2 pr-3 font-medium">{t("attendance.col_outs")}</th>
+            {onCorrect && (
+              <th className="py-2 pr-3">
+                <span className="sr-only">{t("correction.fix")}</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline bg-surface-raised text-ink">
@@ -136,6 +144,18 @@ function AttendanceTable({
                 <td className="whitespace-nowrap py-2 pr-3">{formatHm(row.seconds_on_site)}</td>
                 <td className="whitespace-nowrap py-2 pr-3">{row.check_ins}</td>
                 <td className="whitespace-nowrap py-2 pr-3">{row.check_outs}</td>
+                {onCorrect && (
+                  <td className="whitespace-nowrap py-2 pr-3 text-right">
+                    <span className="inline-flex items-center gap-2">
+                      {/* A corrected day says so beside its own numbers: the
+                          hours are no longer purely what the cameras saw. */}
+                      {row.corrected && <Pill tone="warning">{t("correction.corrected")}</Pill>}
+                      <Button size="sm" variant="ghost" onClick={() => onCorrect(row)}>
+                        {t("correction.fix")}
+                      </Button>
+                    </span>
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -156,6 +176,7 @@ export function AttendancePage(): JSX.Element {
   const [until, setUntil] = useState(() => toDateInputValue(new Date()));
   const [submitted, setSubmitted] = useState<{ since: string; until: string } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<AttendanceRow | null>(null);
 
   const reach = useQuery({ queryKey: ["org", "reach"], queryFn: getMyCapabilityReach });
   const canView =
@@ -192,6 +213,7 @@ export function AttendancePage(): JSX.Element {
   }
 
   const rows = report.data ?? [];
+  const canCorrect = capabilityReaches(reach.data, "correct_attendance", nodeId ?? "");
   const totalSeconds = rows.reduce((sum, r) => sum + r.seconds_on_site, 0);
   const peopleCount = new Set(rows.map((r) => r.person_id)).size;
   const missingDays = rows.filter((r) => r.unpaired_ins + r.unpaired_outs > 0).length;
@@ -274,7 +296,7 @@ export function AttendancePage(): JSX.Element {
         <Empty title={t("attendance.empty")} />
       ) : (
         <div className="space-y-3">
-          <AttendanceTable rows={rows} t={t} />
+          <AttendanceTable rows={rows} t={t} onCorrect={canCorrect ? setCorrecting : null} />
           <div className="space-y-1 text-sm">
             <p className="text-ink">
               {t("attendance.total_hours")}: {formatHm(totalSeconds)} ·{" "}
@@ -284,6 +306,17 @@ export function AttendancePage(): JSX.Element {
             <p className="text-ink-muted">{t("attendance.missing_hint")}</p>
           </div>
         </div>
+      )}
+
+      {correcting && sinceIso && untilIso && nodeId && (
+        <AttendanceCorrectionDialog
+          open={true}
+          onClose={() => setCorrecting(null)}
+          row={correcting}
+          nodeId={nodeId}
+          sinceIso={sinceIso}
+          untilIso={untilIso}
+        />
       )}
     </div>
   );

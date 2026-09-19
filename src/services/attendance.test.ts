@@ -15,6 +15,7 @@ function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
     unpaired_ins: 0,
     unpaired_outs: 0,
     on_site: false,
+    corrected: false,
     ...overrides,
   };
 }
@@ -29,7 +30,7 @@ describe("attendanceRowsToCsv", () => {
     const csv = attendanceRowsToCsv([]);
     const header = csv.slice(1);
     expect(header).toBe(
-      "person_id,full_name,employee_code,day,first_in,last_out,hours_on_site,check_ins,check_outs,unpaired_ins,unpaired_outs,on_site",
+      "person_id,full_name,employee_code,day,first_in,last_out,hours_on_site,check_ins,check_outs,unpaired_ins,unpaired_outs,on_site,corrected",
     );
   });
 
@@ -68,12 +69,22 @@ describe("attendanceRowsToCsv", () => {
   it("writes empty strings for missing first_in / last_out", () => {
     const csv = attendanceRowsToCsv([row({ first_in: null, last_out: null })]);
     const dataLine = csv.slice(1).split("\r\n")[1];
-    expect(dataLine).toBe("p1,Nguyen Van A,E001,2026-09-18,,,8.00,1,1,0,0,false");
+    expect(dataLine).toBe("p1,Nguyen Van A,E001,2026-09-18,,,8.00,1,1,0,0,false,false");
   });
 
+  // By column, not by position: this used to assert the LAST field, which
+  // silently became a different column the moment one was appended.
   it("renders on_site as true when the row is on site", () => {
     const csv = attendanceRowsToCsv([row({ on_site: true })]);
-    const dataLine = csv.slice(1).split("\r\n")[1];
-    expect(dataLine?.endsWith(",true")).toBe(true);
+    const [header, dataLine] = csv.slice(1).split("\r\n");
+    const index = (header ?? "").split(",").indexOf("on_site");
+    expect((dataLine ?? "").split(",")[index]).toBe("true");
+  });
+
+  it("marks a corrected day, so a payroll run can see a human changed it", () => {
+    const csv = attendanceRowsToCsv([row({ corrected: true })]);
+    const [header, dataLine] = csv.slice(1).split("\r\n");
+    const index = (header ?? "").split(",").indexOf("corrected");
+    expect((dataLine ?? "").split(",")[index]).toBe("true");
   });
 });
