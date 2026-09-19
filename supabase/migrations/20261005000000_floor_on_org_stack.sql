@@ -48,18 +48,33 @@ alter table public.camera_stations
 -- Backfill: every distinct (node, normalised line text) already on a station
 -- becomes a row, and the stations point at it. Runs before the not-null below,
 -- so a deployment with existing stations survives it.
-insert into public.camera_lines (org_node_id, name)
-select distinct s.org_node_id, btrim(s.line)
-  from public.camera_stations s
- where s.line_id is null and length(btrim(s.line)) > 0
-on conflict do nothing;
+--
+-- Guarded on the column still existing because this file must survive being
+-- re-run. It is applied in several transactions, so a failure in a later
+-- section commits the earlier ones and the next attempt replays the whole
+-- file -- against a camera_stations that no longer has the `line` column this
+-- reads. Everything else here is already if-not-exists or drop-then-create;
+-- this was the one statement that could only ever run once.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'camera_stations' and column_name = 'line'
+  ) then
+    insert into public.camera_lines (org_node_id, name)
+    select distinct s.org_node_id, btrim(s.line)
+      from public.camera_stations s
+     where s.line_id is null and length(btrim(s.line)) > 0
+    on conflict do nothing;
 
-update public.camera_stations s
-   set line_id = l.id
-  from public.camera_lines l
- where s.line_id is null
-   and l.org_node_id = s.org_node_id
-   and lower(btrim(l.name)) = lower(btrim(s.line));
+    update public.camera_stations s
+       set line_id = l.id
+      from public.camera_lines l
+     where s.line_id is null
+       and l.org_node_id = s.org_node_id
+       and lower(btrim(l.name)) = lower(btrim(s.line));
+  end if;
+end $$;
 
 alter table public.camera_stations drop column if exists line;
 alter table public.camera_stations alter column line_id set not null;
@@ -481,26 +496,26 @@ begin;
 -- second drains and deletes a message only after that close has committed, so a
 -- failed close is retried rather than skipped. Both guarded on availability so
 -- the file still dry-runs on a plain Postgres.
+-- pgmq and pg_cron are INSTALLED BY 20260917093000, and the cron schema is
+-- granted to postgres there. This migration installs neither and re-grants
+-- nothing: repeating that grant against an already-granted cron schema fails
+-- 2BP01 (dependent privileges exist), which is exactly how this migration first
+-- broke the preview. One migration owns the extensions; this one only adds its
+-- own queue and its own jobs.
+--
+-- So the guard is on pg_extension (what is installed) rather than
+-- pg_available_extensions (what could be). On a plain Postgres 20260917093000
+-- already warned and skipped, so this one finds nothing installed and skips
+-- too -- the file still dry-runs, with the queue plumbing absent rather than
+-- half-built.
 do $$
 begin
-  if exists (select 1 from pg_available_extensions where name = 'pgmq') then
-    execute 'create extension if not exists pgmq';
+  if exists (select 1 from pg_extension where extname = 'pgmq') then
     if not exists (select 1 from pgmq.list_queues() where queue_name = 'lost_camera_capture_sessions') then
       perform pgmq.create('lost_camera_capture_sessions');
     end if;
   else
-    raise warning 'pgmq unavailable: queue not created, reaper left unscheduled';
-  end if;
-end $$;
-
-do $$
-begin
-  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
-    execute 'create extension if not exists pg_cron with schema pg_catalog';
-    execute 'grant usage on schema cron to postgres';
-    execute 'grant all privileges on all tables in schema cron to postgres';
-  else
-    raise warning 'pg_cron unavailable: reaper left unscheduled';
+    raise warning 'pgmq not installed: queue not created, reaper left unscheduled';
   end if;
 end $$;
 
