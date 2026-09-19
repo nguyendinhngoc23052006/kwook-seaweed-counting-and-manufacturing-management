@@ -21,10 +21,15 @@ const DEVICE_ROLES = [
   "check_out",
 ];
 
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -53,6 +58,7 @@ async function notifyTelegram(deviceName: string, createdByName: string): Promis
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }

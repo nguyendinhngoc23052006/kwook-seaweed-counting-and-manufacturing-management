@@ -82,7 +82,7 @@ export function CameraStationsPanel({
               <ListRow
                 key={s.id}
                 title={s.name}
-                subtitle={`${s.line} · ${t(`device.role_${s.kind}`)}`}
+                subtitle={`${s.line_name} · ${t(`device.role_${s.kind}`)}`}
                 meta={!s.active ? <Pill tone="neutral">{t("station.retired")}</Pill> : undefined}
                 trailing={
                   canManage ? (

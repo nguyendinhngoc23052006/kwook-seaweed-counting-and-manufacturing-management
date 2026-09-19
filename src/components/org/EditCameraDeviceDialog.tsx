@@ -130,7 +130,7 @@ export function EditCameraDeviceDialog({
               { value: "", label: t("device.no_station") },
               ...(stations.data ?? [])
                 .filter((s) => s.active)
-                .map((s) => ({ value: s.id, label: `${s.name} · ${s.line}` })),
+                .map((s) => ({ value: s.id, label: `${s.name} · ${s.line_name}` })),
             ]}
           />
           {(stations.data ?? []).length === 0 && !stations.isLoading && (
