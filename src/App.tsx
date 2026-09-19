@@ -15,12 +15,10 @@ const OrgApp = lazy(() => import("./org/OrgApp").then((m) => ({ default: m.OrgAp
 const PublicJobsApp = lazy(() =>
   import("./public/PublicJobsApp").then((m) => ({ default: m.PublicJobsApp })),
 );
-const Admin = lazy(() => import("./pages/Admin"));
 const AttendanceCamera = lazy(() => import("./pages/AttendanceCamera"));
 const Capture = lazy(() => import("./pages/Capture"));
 const Pair = lazy(() => import("./pages/Pair"));
 const Station = lazy(() => import("./pages/Station"));
-const Stations = lazy(() => import("./pages/Stations"));
 const Wall = lazy(() => import("./pages/Wall"));
 
 // Reused at every Suspense boundary below rather than each site inventing its
@@ -79,7 +77,7 @@ export default function App() {
   // The org-admin section (org chart, capabilities, cameras, hiring, tasks)
   // is a self-contained sibling app: its own providers, its own auth/capability
   // gate against the persons/org_nodes model, entirely separate from the
-  // profiles-table gate below that the device/wall/admin pages use.
+  // profiles-table gate below that the device and wall pages use.
   if (pathname.startsWith("/org"))
     return (
       <Suspense fallback={<PageLoading />}>
@@ -100,14 +98,7 @@ export default function App() {
   // Falling through to the ordinary gate below (loading -> !profile -> Login,
   // else redirected home by the BrowserRouter's catch-all) is what lets the
   // reload actually notice the new session.
-  const STAFF_PATHS = new Set([
-    "/capture",
-    "/wall",
-    "/stations",
-    "/admin",
-    "/login",
-    "/attendance",
-  ]);
+  const STAFF_PATHS = new Set(["/capture", "/wall", "/login", "/attendance"]);
   const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
   if (!isStaffPath)
     return (
@@ -165,7 +156,8 @@ export default function App() {
 
   // A device still boots straight to its own screen. A human belongs in the
   // management hub -- the counting wall is one module inside the business, not
-  // the front door to it. /wall, /stations and /admin stay reachable by name.
+  // the front door to it. /wall and /station/:id stay reachable by name;
+  // cameras and stations are managed in the hub, at /org/cameras.
   const home = profile.kind === "device" ? (door ? "/attendance" : "/capture") : "/org";
 
   return (
@@ -178,9 +170,7 @@ export default function App() {
             element={door ? <AttendanceCamera door={door} /> : <Navigate to={home} replace />}
           />
           <Route path="/wall" element={<Wall profile={profile} />} />
-          <Route path="/stations" element={<Stations profile={profile} />} />
           <Route path="/station/:id" element={<Station profile={profile} />} />
-          <Route path="/admin" element={<Admin profile={profile} />} />
           <Route
             path="*"
             element={

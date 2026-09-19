@@ -25,10 +25,12 @@ interface NavItem {
   min: string;
 }
 
+// Cameras and stations moved into the management hub, which is a SEPARATE
+// BrowserRouter tree -- a <Link> into it resolves to nothing, so this one is
+// followed as a plain href by whatever renders NAV.
 const NAV: NavItem[] = [
   { key: "wall", label: "Wall", href: "/wall", min: "viewer" },
-  { key: "stations", label: "Stations", href: "/stations", min: "manager" },
-  { key: "cameras", label: "Cameras", href: "/admin", min: "owner" },
+  { key: "cameras", label: "Cameras", href: "/org/cameras", min: "manager" },
 ];
 
 async function signOut() {

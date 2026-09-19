@@ -251,9 +251,9 @@ export default function Station({ profile }: { profile: Profile }) {
               takes it off the line at once. The figures below are what earlier sessions left
               behind.
             </p>
-            <Link className="btn btn--primary" to="/admin">
+            <a className="btn btn--primary" href="/org/cameras">
               Open Cameras
-            </Link>
+            </a>
           </div>
         ) : (
           <div className="row">

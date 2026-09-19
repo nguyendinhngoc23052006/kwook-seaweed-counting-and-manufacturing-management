@@ -216,9 +216,9 @@ export default function Wall({ profile }: { profile: Profile }) {
               stretch of belt, a doorway.
             </p>
             {atLeast(profile.role, "manager") ? (
-              <Link className="btn btn--primary" to="/stations">
+              <a className="btn btn--primary" href="/org/cameras">
                 Set up stations
-              </Link>
+              </a>
             ) : (
               <p className="empty__body">Ask a manager to add the first station.</p>
             )}
@@ -283,9 +283,9 @@ export default function Wall({ profile }: { profile: Profile }) {
                 line and appears nowhere above.
               </span>
               {atLeast(profile.role, "owner") ? (
-                <Link className="btn" to="/admin">
+                <a className="btn" href="/org/cameras">
                   Assign them in Cameras
-                </Link>
+                </a>
               ) : (
                 <span>Ask an owner to assign them in Cameras.</span>
               )}
