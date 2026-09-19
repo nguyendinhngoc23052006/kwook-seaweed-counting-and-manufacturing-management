@@ -795,5 +795,11 @@
   "sysadmins.appoint_failed": "Không bổ nhiệm được tài khoản đó.",
   "sysadmins.retire_failed": "Không cho tài khoản đó thôi quyền được.",
   "people.unseated": "Chưa có vị trí",
-  "people.unseated_hint": "Những người hiện không giữ vị trí nào. Không có mục này thì không còn đường nào tới họ — mọi lối khác đều đi qua một vị trí."
+  "people.unseated_hint": "Những người hiện không giữ vị trí nào. Không có mục này thì không còn đường nào tới họ — mọi lối khác đều đi qua một vị trí.",
+  "face.withdraw": "Xoá khuôn mặt này",
+  "face.withdraw_hint": "Xoá vĩnh viễn dữ liệu khuôn mặt. Các cửa sẽ không nhận diện nữa; lịch sử chấm công vẫn giữ nguyên.",
+  "face.withdraw_reason": "Lý do",
+  "face.withdraw_reason_placeholder": "ví dụ: đăng ký nhầm người",
+  "face.withdraw_confirm": "Xoá",
+  "face.withdraw_failed": "Không xoá được khuôn mặt."
 }

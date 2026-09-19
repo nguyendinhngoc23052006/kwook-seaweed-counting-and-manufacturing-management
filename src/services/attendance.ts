@@ -314,3 +314,21 @@ export async function voidAttendancePunch(input: {
   });
   if (error) throw error;
 }
+
+// Withdrawing a face. Enrolling again replaces a template; nothing removed
+// one, so somebody enrolled by mistake -- or who has left -- kept a live
+// 128-number biometric record forever and the only offered remedy was to
+// supply another one. A departed person is already excluded from matching, so
+// this is not about recognition: it is about not holding a template nobody has
+// a reason to hold. The rows are deleted, not tombstoned, and the audit keeps
+// that it happened without keeping the numbers.
+export async function withdrawFace(personId: string, reason: string): Promise<number> {
+  if (!personId) throw new Error("person required");
+  if (reason.trim().length < 3) throw new Error("a reason is required");
+  const { data, error } = await supabase().rpc("org_withdraw_face", {
+    p_person_id: personId,
+    p_reason: reason.trim(),
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}

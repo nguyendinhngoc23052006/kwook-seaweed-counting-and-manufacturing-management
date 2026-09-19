@@ -795,5 +795,11 @@
   "sysadmins.appoint_failed": "Could not appoint that account.",
   "sysadmins.retire_failed": "Could not stand that account down.",
   "people.unseated": "Not in a seat",
-  "people.unseated_hint": "People with no chair anywhere. Without this list they would be unreachable — every other route to a person goes through a seat."
+  "people.unseated_hint": "People with no chair anywhere. Without this list they would be unreachable — every other route to a person goes through a seat.",
+  "face.withdraw": "Remove this face",
+  "face.withdraw_hint": "Deletes the stored face permanently. The doors stop recognising them; their attendance history is untouched.",
+  "face.withdraw_reason": "Why",
+  "face.withdraw_reason_placeholder": "e.g. enrolled onto the wrong person",
+  "face.withdraw_confirm": "Delete it",
+  "face.withdraw_failed": "Could not remove that face."
 }
