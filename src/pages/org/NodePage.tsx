@@ -37,7 +37,7 @@ import {
   setNodeNature,
 } from "../../services/nodes";
 import { listVisiblePersons } from "../../services/people";
-import { listRanks } from "../../services/positions";
+import { listRanks } from "../../services/ranks";
 
 // Nature and rank names are catalogue rows (node_natures, ranks), not an enum
 // baked into this file — this repo has no src/types/database.ts, so nodes.ts

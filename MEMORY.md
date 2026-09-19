@@ -83,3 +83,43 @@
   `MoveNodeDialog`'s trigger is "Báo cáo cho". Generic regexes collide
   ("Thu hồi" vs "đã thu hồi", "Ngừng hoạt động" vs "đã ngừng hoạt động") —
   anchor them.
+
+## CSS and the component layer
+
+- `src/styles.css` (the floor/device design system) is imported by
+  `src/index.css` into a **`legacy` cascade layer**, never as a second
+  un-layered stylesheet. Un-layered CSS beats ALL layered CSS regardless of
+  order or specificity, which is why its bare `button { }` used to defeat
+  every Tailwind utility in the hub. Layer order is
+  `theme, base, legacy, components, utilities` — verify it in the BUILT css
+  (`@layer` blocks appear in that order), not in the source.
+- `--radius-sm`/`--radius-md` are declared in index.css's **un-layered**
+  `:root` because styles.css also declares them and the legacy layer would
+  otherwise win. Anything that must beat the legacy layer goes there.
+- shadcn's token names (`--color-primary`, `--color-accent`, …) are bound by
+  reference to the `--kw-*` values in `@theme inline`. `accent` carries
+  shadcn's meaning — the hover tint — so the brand hue is `primary`;
+  `primary-strong/-subtle/-text` replaced the old `accent-*` utilities.
+- The UI primitives in `src/components/ui/` are shadcn implementations under
+  this repo's PascalCase filenames (CLAUDE.md's naming rule wins over
+  shadcn's lowercase convention). There is ONE of each — `org/TouchSelect`
+  was a second hand-rolled select and is gone.
+
+## Staging state after the wipe
+
+- staging is a **Supabase branch** (`ggdswhusjogumfkplrkm`), not the main
+  project (`tlnqzqadqipuwwjopqbu`, whose public schema is empty). Query the
+  branch ref, or you will conclude the tables do not exist.
+- After the wipe: 1 node, 1 sysadmin, 16 capability types, 5 ranks, and
+  **0 persons, 0 positions, 0 holders, 0 capability grants**. Every hub
+  screen is legitimately empty — an empty screen here is not a bug, and
+  "the log does not render" was this, not a defect.
+- `org_capability_history()` is verified working end-to-end as
+  `role authenticated` with the real jwt sub: grant + revoke both logged,
+  and the definer RPC and a direct `node_capabilities` select agree.
+- The history names **"system"** as the actor for every sysadmin action:
+  the join is `persons p on p.account_id = nc.created_by` and a sysadmin
+  has no `persons` row.
+- Writing and reading in ONE statement (a CTE calling `org_set_capability`
+  then counting) sees 0 — same-statement snapshot. Use two statements.
+
