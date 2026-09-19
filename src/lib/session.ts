@@ -17,11 +17,11 @@ export interface DeviceConfig {
 }
 
 // Identity only. What this camera does and where it stands is the owner's to
-// set, so it is read from the same devices row by loadAssignment and snapshotted
-// onto the session server-side - never chosen here, and never held twice.
+// set, so it is read from the same camera_devices row by loadAssignment and
+// snapshotted onto the session server-side - never chosen here, never held twice.
 export async function loadDeviceConfig(profileId: string): Promise<DeviceConfig | null> {
   const { data, error } = await supabase()
-    .from("devices")
+    .from("camera_devices")
     .select("id, name, revoked_at")
     .eq("id", profileId)
     .maybeSingle();
