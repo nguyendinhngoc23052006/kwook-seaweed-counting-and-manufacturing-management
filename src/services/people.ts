@@ -228,6 +228,23 @@ export async function attachAccount(personId: string, accountId: string | null):
   return data as Person;
 }
 
+// Offboarding, suspension, and coming back. Never a delete: employee codes
+// must never be reused, so the row and every hour it ever worked stay. Since
+// 20260928000000 this is what actually removes authority -- a non-active
+// holder's seats confer nothing, the same way an archived unit's do -- and
+// reactivating restores the lot.
+export async function setPersonStatus(personId: string, status: Person["status"]): Promise<Person> {
+  if (!personId) throw new Error("person required");
+  const { data, error } = await supabase()
+    .from("persons")
+    .update({ status })
+    .eq("id", personId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Person;
+}
+
 // Everyone the caller may see: their own branch, any subtree where they
 // maintain profiles, and themselves. RLS does the narrowing, so a caller with
 // no seat gets an empty list rather than the company directory.

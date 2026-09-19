@@ -19,9 +19,11 @@ import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import {
+  attachAccount,
   getPerson,
   getPersonBankDetails,
   savePersonBankDetails,
+  setPersonStatus,
   updatePersonProfile,
 } from "../../services/people";
 
@@ -96,16 +98,53 @@ export function PersonPage(): JSX.Element {
   const canSelfEnroll =
     myReach.data?.isAdmin === true || (myReach.data?.byKey.enroll_own_face?.length ?? 0) > 0;
 
+  // Offboarding is what actually removes authority: since 20260928000000 a
+  // non-active holder's seats confer nothing. The row, the seat and every hour
+  // worked survive, so coming back is one click, not a re-hire.
+  const changeStatus = useMutation({
+    mutationFn: (status: "active" | "suspended" | "departed") =>
+      setPersonStatus(personId as string, status),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["org", "person", personId] });
+      queryClient.invalidateQueries({ queryKey: ["org", "tree"] });
+      queryClient.invalidateQueries({ queryKey: ["org", "reach"] });
+    },
+    onError: (e) => setError(errorMessage(e, t("person_page.status_failed"))),
+  });
+
+  // The link the app never had: a person and a login were two records nothing
+  // joined, so the only way to give somebody access was to edit the database.
+  const detach = useMutation({
+    mutationFn: () => attachAccount(personId as string, null),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["org", "person", personId] });
+    },
+    onError: (e) => setError(errorMessage(e, t("person_page.account_failed"))),
+  });
+
   const save = useMutation({
     mutationFn: async () => {
       if (!personId) throw new Error("person required");
       if (canEditProfile) {
-        await updatePersonProfile(personId, {
-          ...profilePatchOf(draft),
-          full_name: draft.fullName,
-          phone: draft.phone.trim() || null,
-          email: draft.email.trim() || null,
-        });
+        // Editing yourself without maintain rights sends contact details only.
+        // org_guard_persons refuses the rest, and sending a field the caller
+        // may not change turns an unrelated save into a permission error.
+        await updatePersonProfile(
+          personId,
+          canMaintainProfile
+            ? {
+                ...profilePatchOf(draft),
+                full_name: draft.fullName,
+                phone: draft.phone.trim() || null,
+                email: draft.email.trim() || null,
+              }
+            : {
+                phone: draft.phone.trim() || null,
+                email: draft.email.trim() || null,
+              },
+        );
       }
       // Bank details are a separate capability on purpose: editing a profile
       // must not reach payroll.
@@ -169,6 +208,78 @@ export function PersonPage(): JSX.Element {
       {error && <Alert variant="error">{error}</Alert>}
       {saved && !save.isPending && <Alert variant="success">{t("person_page.saved")}</Alert>}
 
+      {canMaintainProfile && (
+        <Section title={t("person_page.employment")} description={t("person_page.employment_hint")}>
+          <div className="space-y-4 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">{t("person_page.status_now")}</span>
+              <Pill tone={p.status === "active" ? "success" : "warning"}>
+                {t(`person_status.${p.status}`)}
+              </Pill>
+            </div>
+
+            {p.status !== "active" && (
+              <Alert variant="warning">{t("person_page.inactive_no_authority")}</Alert>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {p.status !== "active" && (
+                <Button
+                  variant="secondary"
+                  disabled={changeStatus.isPending}
+                  onClick={() => changeStatus.mutate("active")}
+                >
+                  {t("person_page.reactivate")}
+                </Button>
+              )}
+              {p.status !== "suspended" && (
+                <Button
+                  variant="secondary"
+                  disabled={changeStatus.isPending}
+                  onClick={() => changeStatus.mutate("suspended")}
+                >
+                  {t("person_page.suspend")}
+                </Button>
+              )}
+              {p.status !== "departed" && (
+                <Button
+                  variant="danger"
+                  disabled={changeStatus.isPending}
+                  onClick={() => changeStatus.mutate("departed")}
+                >
+                  {t("person_page.depart")}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("person_page.status_hint")}</p>
+
+            {/* Only the sysadmin or the CEO may link or unlink an account --
+                org_guard_persons refuses everyone else, so the control is not
+                drawn for them rather than drawn and failing. */}
+            {myReach.data?.isAdmin && (
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-sm font-medium text-foreground">{t("person_page.login")}</p>
+                {p.account_id ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Pill tone="accent">{t("person_page.has_login")}</Pill>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={detach.isPending}
+                      onClick={() => detach.mutate()}
+                    >
+                      {t("person_page.detach_login")}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("person_page.no_login_yet")}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
       <Section
         title={t("person_page.details")}
         description={readOnly ? t("person_page.read_only") : t("person_page.details_hint")}
@@ -183,6 +294,7 @@ export function PersonPage(): JSX.Element {
             canMaintainProfile={canEditProfile}
             canMaintainBank={canMaintainBank}
             disabled={save.isPending || readOnly}
+            employmentReadOnly={!canMaintainProfile}
             idPrefix="person-page"
           />
           {!readOnly && (

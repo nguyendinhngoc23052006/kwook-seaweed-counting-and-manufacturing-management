@@ -698,5 +698,19 @@
   "correction.corrected": "Đã sửa",
   "correction.fix": "Sửa",
   "correction.failed": "Không lưu được chỉnh sửa.",
-  "capability.correct_attendance": "Sửa chấm công"
+  "capability.correct_attendance": "Sửa chấm công",
+  "person_page.employment": "Hồ sơ lao động",
+  "person_page.employment_hint": "Trạng thái quyết định vị trí của người này còn quyền hạn hay không.",
+  "person_page.status_now": "Hiện tại:",
+  "person_page.inactive_no_authority": "Khi chưa hoạt động, các vị trí của họ không còn quyền hạn nào — không quyền, không cấp bậc. Hồ sơ và giờ công vẫn giữ nguyên.",
+  "person_page.reactivate": "Cho hoạt động lại",
+  "person_page.suspend": "Tạm ngưng",
+  "person_page.depart": "Đánh dấu đã nghỉ",
+  "person_page.status_hint": "Không ai bị xoá — mã nhân viên không bao giờ dùng lại. Cho hoạt động lại sẽ khôi phục mọi thứ họ từng có.",
+  "person_page.status_failed": "Không đổi được trạng thái.",
+  "person_page.login": "Tài khoản đăng nhập",
+  "person_page.detach_login": "Gỡ liên kết đăng nhập",
+  "person_page.no_login_yet": "Chưa có tài khoản đăng nhập nào liên kết với người này.",
+  "person_page.account_failed": "Không đổi được liên kết tài khoản.",
+  "person_form.employment_readonly": "Họ tên và ngày vào làm do quản lý của bạn giữ. Nếu sai, hãy báo họ."
 }

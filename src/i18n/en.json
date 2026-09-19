@@ -698,5 +698,19 @@
   "correction.corrected": "Corrected",
   "correction.fix": "Correct",
   "correction.failed": "Could not save that correction.",
-  "capability.correct_attendance": "Correct attendance"
+  "capability.correct_attendance": "Correct attendance",
+  "person_page.employment": "Employment",
+  "person_page.employment_hint": "Status decides whether this person's seats still carry any authority.",
+  "person_page.status_now": "Right now:",
+  "person_page.inactive_no_authority": "While they are not active, their seats carry no authority — no capabilities, no rank, nothing. Their record and their hours are untouched.",
+  "person_page.reactivate": "Bring back",
+  "person_page.suspend": "Suspend",
+  "person_page.depart": "Mark as left",
+  "person_page.status_hint": "Nobody is ever deleted — an employee code must never be reused. Bringing someone back restores everything they had.",
+  "person_page.status_failed": "Could not change that status.",
+  "person_page.login": "Login account",
+  "person_page.detach_login": "Unlink the login",
+  "person_page.no_login_yet": "No login is linked to this person yet.",
+  "person_page.account_failed": "Could not change the login link.",
+  "person_form.employment_readonly": "Your name and start date are kept by your manager. Ask them if something here is wrong."
 }
