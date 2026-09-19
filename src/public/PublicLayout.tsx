@@ -40,7 +40,7 @@ export function PublicLayout(): JSX.Element {
                 navigation for App.tsx to re-evaluate which app owns the path. */}
             <a
               href={signedIn ? "/org" : "/login"}
-              className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-accent-text hover:bg-surface-muted"
+              className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium text-primary-text hover:bg-surface-muted"
             >
               {signedIn ? t("public.go_to_workspace") : t("public.staff_sign_in")}
             </a>

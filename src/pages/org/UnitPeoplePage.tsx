@@ -61,7 +61,7 @@ export function UnitPeoplePage(): JSX.Element {
       <div>
         <Link
           to={`/org/node/${nodeId}`}
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("unit.back_to_node")}
         </Link>
@@ -91,7 +91,7 @@ export function UnitPeoplePage(): JSX.Element {
                     <div className="flex items-center gap-2">
                       <Link
                         to={`/org/node/${nodeId}/person/${seat.person_id}`}
-                        className="text-sm font-medium text-accent-text hover:underline"
+                        className="text-sm font-medium text-primary-text hover:underline"
                       >
                         {seat.person_name}
                         {seat.employee_code ? ` · ${seat.employee_code}` : ""}

@@ -96,7 +96,7 @@ export function UnitPage(): JSX.Element {
         <div className="mt-4">
           <Link
             to={`/org/node/${nodeId}/people`}
-            className="text-sm font-medium text-accent-text hover:underline"
+            className="text-sm font-medium text-primary-text hover:underline"
           >
             {t("unit.view_people")}
           </Link>
@@ -125,7 +125,7 @@ export function UnitPage(): JSX.Element {
           <div className="mt-4">
             <Link
               to={`/org/node/${nodeId}/cameras`}
-              className="text-sm font-medium text-accent-text hover:underline"
+              className="text-sm font-medium text-primary-text hover:underline"
             >
               {t("unit.view_cameras")}
             </Link>

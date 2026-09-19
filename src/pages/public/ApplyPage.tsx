@@ -103,7 +103,7 @@ export function ApplyPage(): JSX.Element {
         )}
         <Link
           to="/"
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("public.back_to_roles")}
         </Link>
@@ -119,7 +119,7 @@ export function ApplyPage(): JSX.Element {
       <div>
         <Link
           to={`/jobs/${job.id}`}
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("apply.back_to_role")}
         </Link>

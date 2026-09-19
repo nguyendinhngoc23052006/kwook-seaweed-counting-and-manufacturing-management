@@ -1,37 +1,49 @@
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { ButtonHTMLAttributes } from "react";
+import { cn } from "../../lib/utils";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
-type Size = "md" | "sm";
+// Sizes are a touch floor, not a taste: this runs in a warehouse, on phones,
+// by people wearing gloves. 48px default, 44px minimum, never the 34px the
+// browser gives you for free.
+const buttonVariants = cva(
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium outline-none transition-[color,box-shadow,background-color] focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        primary: "bg-primary text-primary-foreground shadow-sm hover:bg-primary-strong",
+        secondary: "border border-border bg-card text-foreground shadow-sm hover:bg-muted",
+        danger: "bg-destructive text-destructive-foreground shadow-sm hover:brightness-95",
+        ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary-text underline-offset-4 hover:underline",
+      },
+      size: {
+        md: "min-h-12 px-4 text-base has-[>svg]:px-3.5",
+        sm: "min-h-11 px-3 text-sm has-[>svg]:px-2.5",
+        icon: "size-12 p-0",
+        "icon-sm": "size-11 p-0",
+      },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  },
+);
 
-interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  size?: Size;
+export interface ButtonProps
+  extends ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
 }
 
-const styles: Record<Variant, string> = {
-  // `!` forces these to beat styles.css's un-layered `button { background: var(--accent) }`, which otherwise wins over the plain disabled: utilities and leaves a disabled primary button looking enabled.
-  primary:
-    "bg-accent text-accent-on hover:bg-accent-strong disabled:bg-ink-faint! disabled:text-surface!",
-  secondary:
-    "bg-surface-raised text-ink border border-hairline hover:bg-surface-muted disabled:opacity-50",
-  danger: "bg-danger-fill text-white hover:brightness-95 disabled:opacity-50",
-  ghost: "text-ink hover:bg-surface-muted disabled:opacity-50",
-};
-
-// 48px default, 44px minimum. Every button in the app was 34px tall, which is
-// below the touch floor on every platform guideline -- and this is used in a
-// warehouse, on phones, by people wearing gloves.
-const sizes: Record<Size, string> = {
-  md: "min-h-12 px-4 text-base",
-  sm: "min-h-11 px-3 text-sm",
-};
-
-export function Button({ variant = "primary", size = "md", className, ...props }: Props) {
+export function Button({ className, variant, size, asChild = false, ...props }: ButtonProps) {
+  const Comp = asChild ? Slot : "button";
   return (
-    <button
-      type={props.type ?? "button"}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed ${sizes[size]} ${styles[variant]} ${className ?? ""}`}
+    <Comp
+      data-slot="button"
+      type={asChild ? undefined : (props.type ?? "button")}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   );
 }
+
+export { buttonVariants };

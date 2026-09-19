@@ -229,7 +229,7 @@ function OrgNav({ rootNodeId }: { rootNodeId: string }) {
             to={tab.to}
             className={`min-h-11 rounded-t-lg px-4 py-2 text-sm font-medium ${
               location.pathname.startsWith(tab.match)
-                ? "border-b-2 border-accent text-accent-text"
+                ? "border-b-2 border-primary text-primary-text"
                 : "text-ink-muted hover:text-ink"
             }`}
           >

@@ -1,4 +1,18 @@
+/* Cascade layers, declared before any @import so the order is ours, not the
+   order the files happen to load in.
+
+   `legacy` is styles.css -- the floor/device design system this repo already
+   ships. It is un-layered no longer: un-layered CSS beats ALL layered CSS
+   regardless of specificity or order, which is why its bare `button { }` rule
+   used to defeat every Tailwind utility in the org hub and forced `!` hacks
+   into the components. Sitting in `legacy` it still beats Tailwind's reset
+   (so the floor pages look exactly as before) and loses to `components` and
+   `utilities` (so the hub can style itself). */
+@layer theme, base, legacy, components, utilities;
+
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles.css" layer(legacy);
 
 /* ---------------------------------------------------------------------------
    Kwook design tokens, reused verbatim from kwook-management-hub.
@@ -9,12 +23,9 @@
    emits `var(--kw-surface)` and follows the theme at runtime instead of being
    frozen at build time.
 
-   This file is loaded BEFORE styles.css (see main.tsx) precisely so that
-   styles.css -- the existing device/admin design system this repo already
-   ships -- keeps the last word in the cascade for every selector the two
-   touch in common (`*`, `body`, etc.). Tailwind's own reset layer is global
-   by default; ordering it first is what stops it from silently repainting
-   the existing factory-floor pages.
+   styles.css is imported above into the `legacy` layer rather than loaded as
+   a second un-layered stylesheet, so the floor pages keep their look while
+   the hub's utilities win where the two overlap.
 
    Colour rule: the four petal hues are brand, not text. Gold (~1.9:1), green
    (~2.3:1) and red (~4.3:1) all fail WCAG AA as body text on white, so each
@@ -62,6 +73,19 @@
   /* Focus ring -- one definition, used by every interactive element */
   --kw-ring: #336eb4;
 
+  /* Ink on a filled danger control, in both themes -- --kw-accent-on flips to
+     near-black in dark mode, which is unreadable on red. */
+  --kw-danger-on: #ffffff;
+
+  /* Radius scale. Declared here, un-layered, because styles.css also defines
+     --radius-sm/--radius-md on :root and the legacy layer would otherwise win.
+     sm and md keep the legacy pixel values exactly, so the floor pages are
+     unchanged; lg and xl extend the scale for the hub. */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+
   /* Elevation */
   --kw-shadow-sm: 0 1px 2px rgb(23 26 23 / 0.06);
   --kw-shadow-md: 0 2px 8px rgb(23 26 23 / 0.08);
@@ -102,6 +126,7 @@
     --kw-danger-subtle: #2d1113;
 
     --kw-ring: #6ea6e4;
+    --kw-danger-on: #ffffff;
 
     --kw-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --kw-shadow-md: 0 2px 8px rgb(0 0 0 / 0.5);
@@ -140,6 +165,7 @@
   --kw-danger-subtle: #2d1113;
 
   --kw-ring: #6ea6e4;
+  --kw-danger-on: #ffffff;
 
   --kw-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --kw-shadow-md: 0 2px 8px rgb(0 0 0 / 0.5);
@@ -171,11 +197,9 @@
   --color-ink-faint: var(--kw-ink-faint);
   --color-hairline: var(--kw-hairline);
   --color-hairline-strong: var(--kw-hairline-strong);
-  --color-accent: var(--kw-accent);
-  --color-accent-strong: var(--kw-accent-strong);
-  --color-accent-subtle: var(--kw-accent-subtle);
-  --color-accent-text: var(--kw-accent-text);
-  --color-accent-on: var(--kw-accent-on);
+  --color-primary-strong: var(--kw-accent-strong);
+  --color-primary-subtle: var(--kw-accent-subtle);
+  --color-primary-text: var(--kw-accent-text);
   --color-success: var(--kw-success);
   --color-success-text: var(--kw-success-text);
   --color-success-subtle: var(--kw-success-subtle);
@@ -186,6 +210,30 @@
   --color-danger-fill: var(--kw-danger-fill);
   --color-danger-text: var(--kw-danger-text);
   --color-danger-subtle: var(--kw-danger-subtle);
+
+  /* shadcn/ui's semantic names, bound to the same --kw-* source of truth above.
+     Editing a --kw-* value retints both the hub and the floor; there is no
+     second palette to keep in sync. `accent` carries shadcn's meaning -- the
+     hover/selected tint, not the brand hue, which is `primary`. */
+  --color-background: var(--kw-surface-sunken);
+  --color-foreground: var(--kw-ink);
+  --color-card: var(--kw-surface-raised);
+  --color-card-foreground: var(--kw-ink);
+  --color-popover: var(--kw-surface-raised);
+  --color-popover-foreground: var(--kw-ink);
+  --color-primary: var(--kw-accent);
+  --color-primary-foreground: var(--kw-accent-on);
+  --color-secondary: var(--kw-surface-muted);
+  --color-secondary-foreground: var(--kw-ink);
+  --color-muted: var(--kw-surface-muted);
+  --color-muted-foreground: var(--kw-ink-muted);
+  --color-accent: var(--kw-accent-subtle);
+  --color-accent-foreground: var(--kw-accent-text);
+  --color-destructive: var(--kw-danger-fill);
+  --color-destructive-foreground: var(--kw-danger-on);
+  --color-border: var(--kw-hairline);
+  --color-input: var(--kw-hairline);
+  --color-ring: var(--kw-ring);
 
   --shadow-sm: var(--kw-shadow-sm);
   --shadow-md: var(--kw-shadow-md);

@@ -146,7 +146,7 @@ export function JobApplicationsPage(): JSX.Element {
       <div>
         <Link
           to="/org/jobs"
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("applicants.back")}
         </Link>

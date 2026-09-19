@@ -101,7 +101,7 @@ export function InterviewBookingPage(): JSX.Element {
         </p>
         <Link
           to="/"
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("public.back_to_roles")}
         </Link>

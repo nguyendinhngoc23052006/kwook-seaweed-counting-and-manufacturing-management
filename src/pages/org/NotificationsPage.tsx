@@ -150,7 +150,7 @@ export function NotificationsPage(): JSX.Element {
               <article
                 key={notif.id}
                 className={`rounded-lg border border-hairline bg-surface-raised p-4 ${
-                  notif.read_at ? "opacity-60" : "border-accent-subtle bg-accent-subtle"
+                  notif.read_at ? "opacity-60" : "border-primary-subtle bg-primary-subtle"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">

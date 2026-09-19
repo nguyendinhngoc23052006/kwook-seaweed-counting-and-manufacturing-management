@@ -79,7 +79,7 @@ export function ApplicantCard({ a }: { a: JobApplication }): JSX.Element {
                       href={detail.data.portfolio_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-accent-text hover:underline"
+                      className="text-primary-text hover:underline"
                     >
                       {detail.data.portfolio_url}
                     </a>

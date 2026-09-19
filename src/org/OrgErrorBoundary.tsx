@@ -35,7 +35,7 @@ export class OrgErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={this.reset}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-on hover:bg-accent-strong"
+            className="rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-strong"
           >
             Try again
           </button>
