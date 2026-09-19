@@ -590,6 +590,7 @@
   "person_page.attach_login_hint": "Access follows the seat, not this link — linking only tells the system which login belongs to this person.",
   "person_page.attach_login_label": "Link a sign-up",
   "person_page.back_to_node": "Back to the unit",
+  "person_page.delete_hint": "Nothing they recorded is removed — hours, check-ins and tasks all stay.",
   "person_page.depart": "Mark as left",
   "person_page.detach_login": "Unlink the login",
   "person_page.details": "Details",

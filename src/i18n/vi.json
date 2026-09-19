@@ -590,6 +590,7 @@
   "person_page.attach_login_hint": "Quyền truy cập đi theo vị trí, không theo liên kết này — liên kết chỉ cho hệ thống biết tài khoản nào thuộc về người này.",
   "person_page.attach_login_label": "Liên kết tài khoản đăng ký",
   "person_page.back_to_node": "Quay lại đơn vị",
+  "person_page.delete_hint": "Không xóa bất kỳ dữ liệu nào của họ — giờ công, chấm công và công việc đều được giữ.",
   "person_page.depart": "Đánh dấu đã nghỉ",
   "person_page.detach_login": "Gỡ liên kết đăng nhập",
   "person_page.details": "Thông tin",
