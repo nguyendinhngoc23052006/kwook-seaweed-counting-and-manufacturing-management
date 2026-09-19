@@ -98,7 +98,7 @@ export default function App() {
   // Falling through to the ordinary gate below (loading -> !profile -> Login,
   // else redirected home by the BrowserRouter's catch-all) is what lets the
   // reload actually notice the new session.
-  const STAFF_PATHS = new Set(["/capture", "/wall", "/login", "/attendance"]);
+  const STAFF_PATHS = new Set(["/camera", "/capture", "/wall", "/login", "/attendance"]);
   const isStaffPath = STAFF_PATHS.has(pathname) || pathname.startsWith("/station/");
   if (!isStaffPath)
     return (
@@ -164,7 +164,17 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<PageLoading />}>
         <Routes>
-          <Route path="/capture" element={<Capture profile={profile} />} />
+          {/* Where a just-paired camera lands. It cannot know its own role
+              until its row is read, and this is the one place that knows: it
+              resolves to the screen this camera is actually for. */}
+          <Route path="/camera" element={<Navigate to={home} replace />} />
+          {/* Each camera screen refuses the other one's cameras. A door camera
+              rendering the counting screen would sit there recording nothing
+              anyone asked for, so the guard runs both ways. */}
+          <Route
+            path="/capture"
+            element={door ? <Navigate to="/attendance" replace /> : <Capture profile={profile} />}
+          />
           <Route
             path="/attendance"
             element={door ? <AttendanceCamera door={door} /> : <Navigate to={home} replace />}

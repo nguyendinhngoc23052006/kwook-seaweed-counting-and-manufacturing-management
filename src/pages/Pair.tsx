@@ -47,7 +47,11 @@ export default function Pair() {
           token_hash: data as string,
         });
         if (verify.error) throw verify.error;
-        window.location.replace("/");
+        // NOT "/": the bare root is the public careers site, so a camera that
+        // signed in perfectly well landed on the job board and never became a
+        // camera at all. /camera is a staff path that resolves to whichever
+        // screen this camera's own role calls for.
+        window.location.replace("/camera");
       } catch (e: unknown) {
         setError(errorMessage(e));
       }
