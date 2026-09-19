@@ -778,5 +778,10 @@
   "ranks.place_below": "Below {rank}",
   "ranks.create_failed": "Could not add that rank.",
   "ranks.update_failed": "Could not change that rank.",
-  "ranks.load_failed": "Could not load the ranks."
+  "ranks.load_failed": "Could not load the ranks.",
+  "interviews.update_failed": "Could not change that slot.",
+  "interviews.release": "Release",
+  "interviews.starts": "Starts",
+  "interviews.remove": "Remove",
+  "interviews.retime_hint": "Moving the start moves the end with it, keeping the same length."
 }

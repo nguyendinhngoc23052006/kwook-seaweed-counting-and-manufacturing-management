@@ -778,5 +778,10 @@
   "ranks.place_below": "Dưới {rank}",
   "ranks.create_failed": "Không thêm được cấp bậc.",
   "ranks.update_failed": "Không đổi được cấp bậc.",
-  "ranks.load_failed": "Không tải được danh sách cấp bậc."
+  "ranks.load_failed": "Không tải được danh sách cấp bậc.",
+  "interviews.update_failed": "Không đổi được khung giờ.",
+  "interviews.release": "Gỡ lịch",
+  "interviews.starts": "Bắt đầu",
+  "interviews.remove": "Xoá",
+  "interviews.retime_hint": "Dời giờ bắt đầu sẽ dời luôn giờ kết thúc, giữ nguyên độ dài."
 }

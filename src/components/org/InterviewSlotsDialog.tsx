@@ -7,6 +7,9 @@ import {
   addInterviewSlots,
   adminInterviewSlots,
   type InterviewSlotDraft,
+  releaseInterviewBooking,
+  removeInterviewSlot,
+  updateInterviewSlot,
 } from "../../services/interviewSlots";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
@@ -48,6 +51,15 @@ function toDraft(row: DraftRow): InterviewSlotDraft | null {
   return { startsAt, endsAt, capacity };
 }
 
+// <input type="datetime-local"> wants local wall-clock with no zone. Slicing
+// toISOString() would hand it UTC and shift every slot by the offset, which on
+// Asia/Ho_Chi_Minh is a seven-hour lie.
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // The admin side of interview scheduling: add any number of time-range slots
 // for a posting, and see who has already booked into each. Candidate-facing
 // booking is org_book_interview_slot(), a separate anonymous flow -- this
@@ -72,6 +84,42 @@ export function InterviewSlotsDialog(props: Props): JSX.Element | null {
     queryFn: () => adminInterviewSlots(postingId),
     enabled: open,
   });
+
+  const afterSlotWrite = () => {
+    setError(null);
+    queryClient.invalidateQueries({ queryKey: ["jobs", "interview-slots", postingId] });
+  };
+
+  // A slot typed with the wrong time used to stay wrong forever. Capacity is
+  // nudged rather than retyped, and the database refuses a drop below the
+  // number already standing in the slot -- the booked count is derived live,
+  // so letting it go under would silently oversubscribe.
+  const retime = useMutation({
+    mutationFn: (input: { slotId: string; startsAt: string; endsAt: string }) =>
+      updateInterviewSlot(input),
+    onSuccess: afterSlotWrite,
+    onError: (e) => setError(errorMessage(e, t("interviews.update_failed"))),
+  });
+
+  const resize = useMutation({
+    mutationFn: (input: { slotId: string; capacity: number }) => updateInterviewSlot(input),
+    onSuccess: afterSlotWrite,
+    onError: (e) => setError(errorMessage(e, t("interviews.update_failed"))),
+  });
+
+  const remove = useMutation({
+    mutationFn: (slotId: string) => removeInterviewSlot(slotId),
+    onSuccess: afterSlotWrite,
+    onError: (e) => setError(errorMessage(e, t("interviews.update_failed"))),
+  });
+
+  const release = useMutation({
+    mutationFn: (applicationId: string) => releaseInterviewBooking(applicationId),
+    onSuccess: afterSlotWrite,
+    onError: (e) => setError(errorMessage(e, t("interviews.update_failed"))),
+  });
+
+  const slotBusy = retime.isPending || resize.isPending || remove.isPending || release.isPending;
 
   const addRows = useMutation({
     mutationFn: (drafts: InterviewSlotDraft[]) => addInterviewSlots(postingId, drafts),
@@ -210,12 +258,74 @@ export function InterviewSlotsDialog(props: Props): JSX.Element | null {
                       </Pill>
                     </div>
                     {slot.booked.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-sm text-ink-muted">
+                      <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                         {slot.booked.map((booking) => (
-                          <li key={booking.application_id}>{booking.full_name}</li>
+                          <li
+                            key={booking.application_id}
+                            className="flex flex-wrap items-center justify-between gap-2"
+                          >
+                            <span>{booking.full_name}</span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={slotBusy}
+                              onClick={() => release.mutate(booking.application_id)}
+                            >
+                              {t("interviews.release")}
+                            </Button>
+                          </li>
                         ))}
                       </ul>
                     )}
+
+                    <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+                      <div className="min-w-48 flex-1">
+                        <Label htmlFor={`slot-start-${slot.id}`}>{t("interviews.starts")}</Label>
+                        <Input
+                          id={`slot-start-${slot.id}`}
+                          type="datetime-local"
+                          defaultValue={toLocalInput(slot.starts_at)}
+                          disabled={slotBusy}
+                          onChange={(e) => {
+                            const startsAt = new Date(e.target.value);
+                            if (Number.isNaN(startsAt.getTime())) return;
+                            const span =
+                              new Date(slot.ends_at).getTime() - new Date(slot.starts_at).getTime();
+                            retime.mutate({
+                              slotId: slot.id,
+                              startsAt: startsAt.toISOString(),
+                              endsAt: new Date(startsAt.getTime() + span).toISOString(),
+                            });
+                          }}
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("interviews.retime_hint")}
+                        </p>
+                      </div>
+                      <div className="w-28">
+                        <Label htmlFor={`slot-cap-${slot.id}`}>{t("interviews.capacity")}</Label>
+                        <Input
+                          id={`slot-cap-${slot.id}`}
+                          type="number"
+                          min={1}
+                          defaultValue={slot.capacity}
+                          disabled={slotBusy}
+                          onChange={(e) => {
+                            const capacity = Number(e.target.value);
+                            if (!Number.isFinite(capacity) || capacity < 1) return;
+                            resize.mutate({ slotId: slot.id, capacity });
+                          }}
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={slotBusy || slot.booked.length > 0}
+                        onClick={() => remove.mutate(slot.id)}
+                      >
+                        {t("interviews.remove")}
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
