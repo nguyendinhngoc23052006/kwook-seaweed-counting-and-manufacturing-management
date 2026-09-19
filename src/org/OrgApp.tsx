@@ -1,18 +1,12 @@
 import { QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import {
-  Link,
-  Navigate,
-  BrowserRouter as OrgRouter,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
+import { type ReactNode, useEffect, useState } from "react";
+import { Navigate, BrowserRouter as OrgRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
-import { Empty } from "../components/ui/EmptyState";
+import { Empty, ErrorState } from "../components/ui/EmptyState";
 import { Input, Label } from "../components/ui/Input";
 import { Section } from "../components/ui/Section";
+import { ListSkeleton } from "../components/ui/Skeleton";
 import { errorMessage } from "../lib/errorMessage";
 import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
@@ -34,36 +28,48 @@ import { WorkPage } from "../pages/org/WorkPage";
 import { createRootNode } from "../services/nodes";
 import { getMyProfile } from "../services/profiles";
 import { OrgErrorBoundary } from "./OrgErrorBoundary";
-
-async function signOut() {
-  await supabase().auth.signOut();
-  window.location.reload();
-}
+import { OrgShell } from "./OrgShell";
 
 // The org-admin section (capability-gated cameras today; org chart, hiring,
 // tasks to follow) has no node-tree browsing page yet -- there is exactly one
 // node, the Kwook root, so every route defaults straight to it rather than
 // asking the owner to pick from a tree of one.
-function useRootNodeId(): { rootNodeId: string | null; loading: boolean; error: string | null } {
+function useRootNode(): {
+  rootNodeId: string | null;
+  orgName: string;
+  loading: boolean;
+  error: string | null;
+} {
   const [rootNodeId, setRootNodeId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("Kwook");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase()
       .from("org_nodes")
-      .select("id")
+      .select("id, name")
       .is("parent_id", null)
       .limit(1)
       .maybeSingle()
       .then(({ data, error: err }) => {
         if (err) setError(errorMessage(err));
-        else setRootNodeId(data?.id ?? null);
+        else {
+          setRootNodeId(data?.id ?? null);
+          if (data?.name) setOrgName(data.name);
+        }
         setLoading(false);
       });
   }, []);
 
-  return { rootNodeId, loading, error };
+  return { rootNodeId, orgName, loading, error };
+}
+
+// The states that exist before there is an organisation to draw a shell
+// around: booting, broken, empty, and seatless. They get a plain centred
+// frame rather than a nav with nothing behind it.
+function BootScreen({ children }: { children: ReactNode }) {
+  return <div className="mx-auto w-full max-w-lg px-4 py-10 sm:px-6">{children}</div>;
 }
 
 // An organisation with no root node is not "loading" -- it is a business that
@@ -79,18 +85,23 @@ function FirstRun() {
     onSuccess: () => window.location.reload(),
   });
 
-  if (me.isLoading) return <div className="p-6 text-sm text-ink-muted">{t("common.loading")}</div>;
+  if (me.isLoading)
+    return (
+      <BootScreen>
+        <ListSkeleton rows={2} label={t("common.loading")} />
+      </BootScreen>
+    );
 
   if (!me.data?.isAdmin) {
     return (
-      <div className="p-6">
+      <BootScreen>
         <Empty title={t("firstrun.not_ready_title")} description={t("firstrun.not_ready_body")} />
-      </div>
+      </BootScreen>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg p-6">
+    <BootScreen>
       <Section title={t("firstrun.title")} description={t("firstrun.body")}>
         <div className="space-y-3 py-2">
           <Label htmlFor="firstrun-name">{t("firstrun.name_label")}</Label>
@@ -108,7 +119,7 @@ function FirstRun() {
           </Button>
         </div>
       </Section>
-    </div>
+    </BootScreen>
   );
 }
 
@@ -118,9 +129,9 @@ function FirstRun() {
 function NoSeat() {
   const { t } = useI18n();
   return (
-    <div className="p-6">
+    <BootScreen>
       <Empty title={t("noseat.title")} description={t("noseat.body")} />
-    </div>
+    </BootScreen>
   );
 }
 
@@ -131,16 +142,25 @@ function NoSeat() {
 const BOUNDED_CONTENT_ROUTES = ["/org/chart"];
 
 function OrgRoutes() {
-  const { rootNodeId, loading, error } = useRootNodeId();
+  const { t } = useI18n();
+  const { rootNodeId, orgName, loading, error } = useRootNode();
   const { pathname } = useLocation();
   const isBounded = BOUNDED_CONTENT_ROUTES.includes(pathname);
   const me = useQuery({ queryKey: ["profile", "me"], queryFn: getMyProfile });
 
   if (error) {
-    return <div className="p-6 text-sm text-danger-text">{error}</div>;
+    return (
+      <BootScreen>
+        <ErrorState message={error} />
+      </BootScreen>
+    );
   }
   if (loading || me.isLoading) {
-    return <div className="p-6 text-sm text-ink-muted">Loading…</div>;
+    return (
+      <BootScreen>
+        <ListSkeleton rows={4} />
+      </BootScreen>
+    );
   }
   if (!rootNodeId) {
     return <FirstRun />;
@@ -180,67 +200,18 @@ function OrgRoutes() {
     </Routes>
   );
 
-  if (isBounded) {
-    return (
-      <div className="flex h-dvh flex-col overflow-hidden">
-        <div className="shrink-0 px-6 pt-6">
-          <OrgNav rootNodeId={rootNodeId} />
-        </div>
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-6">{routes}</main>
-      </div>
-    );
-  }
+  const displayName = me.data?.person?.display_name || me.data?.person?.full_name || t("nav.me");
 
   return (
-    <>
-      <div className="px-6 pt-6">
-        <OrgNav rootNodeId={rootNodeId} />
-      </div>
-      <div className="px-6 pb-6">{routes}</div>
-    </>
-  );
-}
-
-// Three sections now exist where there was one -- a reader needs a way to move
-// between them that isn't guessing at the URL bar.
-function OrgNav({ rootNodeId }: { rootNodeId: string }) {
-  const { t } = useI18n();
-  const location = useLocation();
-  const tabs: Array<{ to: string; label: string; match: string }> = [
-    { to: `/org/node/${rootNodeId}`, label: t("nav.tree"), match: "/org/node" },
-    { to: "/org/chart", label: t("nav.chart"), match: "/org/chart" },
-    { to: `/org/cameras/${rootNodeId}`, label: t("nav.cameras"), match: "/org/cameras" },
-    {
-      to: `/org/attendance/${rootNodeId}`,
-      label: t("nav.attendance"),
-      match: "/org/attendance",
-    },
-    { to: "/org/jobs", label: t("nav.jobs"), match: "/org/jobs" },
-    { to: "/org/work", label: t("nav.work"), match: "/org/work" },
-    { to: "/org/notifications", label: t("nav.notifications"), match: "/org/notifications" },
-    { to: "/org/profile", label: t("nav.me"), match: "/org/profile" },
-  ];
-  return (
-    <nav className="mb-6 flex flex-wrap items-center justify-between gap-2 border-b border-hairline">
-      <div className="flex flex-wrap gap-1">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.to}
-            to={tab.to}
-            className={`min-h-11 rounded-t-lg px-4 py-2 text-sm font-medium ${
-              location.pathname.startsWith(tab.match)
-                ? "border-b-2 border-primary text-primary-text"
-                : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </div>
-      <Button variant="ghost" size="sm" onClick={signOut}>
-        {t("common.sign_out")}
-      </Button>
-    </nav>
+    <OrgShell
+      rootNodeId={rootNodeId}
+      orgName={orgName}
+      displayName={displayName}
+      photoUrl={me.data?.person?.photo_url}
+      bounded={isBounded}
+    >
+      {routes}
+    </OrgShell>
   );
 }
 
@@ -266,19 +237,21 @@ export function OrgApp() {
   return (
     <OrgErrorBoundary>
       {configError ? (
-        <div className="p-6 text-sm text-danger-text">{configError}</div>
+        <BootScreen>
+          <ErrorState message={configError} />
+        </BootScreen>
       ) : user === "loading" ? (
-        <div className="p-6 text-sm text-ink-muted">Loading…</div>
+        <BootScreen>
+          <ListSkeleton rows={3} />
+        </BootScreen>
       ) : user === "signed-out" ? (
         <Login />
       ) : (
         <QueryClientProvider client={queryClient}>
           <I18nProvider>
-            <div className="min-h-screen bg-surface-sunken">
-              <OrgRouter>
-                <OrgRoutes />
-              </OrgRouter>
-            </div>
+            <OrgRouter>
+              <OrgRoutes />
+            </OrgRouter>
           </I18nProvider>
         </QueryClientProvider>
       )}
