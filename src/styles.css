@@ -82,9 +82,6 @@ body {
   font-size: 1rem;
   line-height: 1.5;
 }
-a {
-  color: var(--accent);
-}
 img,
 video {
   max-width: 100%;

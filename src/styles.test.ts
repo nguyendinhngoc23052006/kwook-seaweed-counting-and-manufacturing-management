@@ -20,7 +20,22 @@ import { describe, expect, it } from "vitest";
 // floor addresses its own elements through its own classes (.btn,
 // .field__input, .table), so a bare selector for anything shadcn also renders
 // is always a latent collision, never a deliberate style.
-const FORBIDDEN_BARE = ["button", "input", "select", "textarea", "table", "th", "td", "fieldset"];
+// `a` is here for the same reason as the rest: an anchor with no colour class
+// of its own -- a shadcn menu item, a link inside a card -- inherits its
+// colour, and inheritance always loses to a rule that matches the element
+// itself. The floor's anchors all carry .btn, .navlink or .card--link, each
+// of which sets its own colour, so the bare rule only ever reached the hub.
+const FORBIDDEN_BARE = [
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "table",
+  "th",
+  "td",
+  "fieldset",
+];
 
 // Tailwind ships a utility of the same name for each of these, so a legacy
 // class rule here wins any property that utility does not set.
