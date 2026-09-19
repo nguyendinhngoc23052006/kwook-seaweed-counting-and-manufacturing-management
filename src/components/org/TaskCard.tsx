@@ -63,7 +63,7 @@ export function TaskCardView(props: Props): JSX.Element {
               seat: counterpart.person_name ?? counterpart.title,
             })}
         {" · "}
-        <Link to={`/org/node/${counterpart.node_id}`} className="text-accent-text hover:underline">
+        <Link to={`/org/node/${counterpart.node_id}`} className="text-primary-text hover:underline">
           {counterpart.node_name}
         </Link>
       </p>

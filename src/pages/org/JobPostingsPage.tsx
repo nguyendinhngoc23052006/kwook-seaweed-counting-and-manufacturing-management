@@ -139,7 +139,7 @@ export function JobPostingsPage(): JSX.Element {
                         href={`/jobs/${job.id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-accent-text hover:underline"
+                        className="text-primary-text hover:underline"
                       >
                         {job.title}
                       </a>
@@ -157,7 +157,7 @@ export function JobPostingsPage(): JSX.Element {
                 <p className="mt-2 text-sm">
                   <Link
                     to={`/org/jobs/${job.id}/applications`}
-                    className="text-accent-text hover:underline"
+                    className="text-primary-text hover:underline"
                   >
                     {counts.isSuccess
                       ? t("jobs.applicants_n", {

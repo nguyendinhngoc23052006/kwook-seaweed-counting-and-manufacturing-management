@@ -1,32 +1,32 @@
 import type { ReactNode } from "react";
+import { cn } from "../../lib/utils";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./Card";
 
-// A titled region with room for one action. Replaces the pattern of a Card
-// whose title is a bare <h2> and whose action floats wherever it was typed.
+// A titled region with room for one action. Built on Card so a Section and a
+// Card cannot drift apart -- there is one surface treatment in the app.
 export function Section({
   title,
   description,
   action,
   children,
   className,
+  contentClassName,
 }: {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
 }) {
   return (
-    <section
-      className={`overflow-hidden rounded-xl border border-hairline bg-surface-raised shadow-sm ${className ?? ""}`}
-    >
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-hairline px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-          {description && <p className="mt-0.5 text-sm text-ink-muted">{description}</p>}
-        </div>
-        {action && <div className="shrink-0">{action}</div>}
-      </header>
-      <div className="px-4 py-2 sm:px-5">{children}</div>
-    </section>
+    <Card className={cn("gap-0 py-0", className)}>
+      <CardHeader className="border-b border-border py-3.5">
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+        {action && <CardAction>{action}</CardAction>}
+      </CardHeader>
+      <CardContent className={cn("py-2", contentClassName)}>{children}</CardContent>
+    </Card>
   );
 }

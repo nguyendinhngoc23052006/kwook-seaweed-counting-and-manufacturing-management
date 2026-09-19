@@ -1,10 +1,10 @@
+import { cn } from "../../lib/utils";
+
 // A skeleton is a promise about what is coming. The word "Đang tải…" is not:
 // it looks identical to a page that has silently failed, which is exactly how
 // the forever-loading unit dashboard hid a missing branch for three weeks.
 export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div aria-hidden="true" className={`animate-pulse rounded-md bg-hairline ${className ?? ""}`} />
-  );
+  return <div aria-hidden="true" className={cn("animate-pulse rounded-md bg-muted", className)} />;
 }
 
 // Every Skeleton block is aria-hidden, so without a label this live region
@@ -16,7 +16,7 @@ export function ListSkeleton({ rows = 3, label }: { rows?: number; label?: strin
       role="status"
       aria-busy="true"
       aria-label={label ?? "Đang tải…"}
-      className="divide-y divide-hairline"
+      className="divide-y divide-border"
       data-testid="list-skeleton"
     >
       {Array.from({ length: rows }, (_, i) => (

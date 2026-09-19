@@ -18,7 +18,7 @@ export function HomePage(): JSX.Element {
   return (
     <div className="space-y-10">
       <section className="max-w-2xl">
-        <p className="text-sm font-medium uppercase tracking-wide text-accent-text">
+        <p className="text-sm font-medium uppercase tracking-wide text-primary-text">
           {t("public.eyebrow")}
         </p>
         <h1 className="mt-2 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl">

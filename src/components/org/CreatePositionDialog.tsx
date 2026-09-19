@@ -10,8 +10,8 @@ import {
   createPersonForSeat,
   type OptionalPersonWrite,
 } from "../../services/people";
-import type { Rank } from "../../services/positions";
 import { createPosition, seatPerson } from "../../services/positions";
+import type { Rank } from "../../services/ranks";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";

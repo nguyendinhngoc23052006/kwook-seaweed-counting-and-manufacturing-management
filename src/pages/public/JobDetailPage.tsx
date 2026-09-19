@@ -46,7 +46,7 @@ export function JobDetailPage(): JSX.Element {
       <div>
         <Link
           to="/"
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("public.back_to_roles")}
         </Link>
@@ -83,7 +83,7 @@ export function JobDetailPage(): JSX.Element {
         </ol>
         <Link
           to={`/jobs/${job.id}/apply`}
-          className="mt-4 inline-flex min-h-12 items-center justify-center rounded-lg bg-accent px-4 text-base font-medium text-accent-on transition hover:bg-accent-strong"
+          className="mt-4 inline-flex min-h-12 items-center justify-center rounded-lg bg-primary px-4 text-base font-medium text-primary-foreground transition hover:bg-primary-strong"
         >
           {t("public.apply_now")}
         </Link>

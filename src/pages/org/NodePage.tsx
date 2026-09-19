@@ -37,7 +37,7 @@ import {
   setNodeNature,
 } from "../../services/nodes";
 import { listVisiblePersons } from "../../services/people";
-import { listRanks } from "../../services/positions";
+import { listRanks } from "../../services/ranks";
 
 // Nature and rank names are catalogue rows (node_natures, ranks), not an enum
 // baked into this file — this repo has no src/types/database.ts, so nodes.ts
@@ -397,7 +397,7 @@ export function NodePage(): JSX.Element {
       <ErrorState
         message={t("orgtree.node_not_found")}
         action={
-          <Link to="/org/node" className="text-sm text-accent-text underline">
+          <Link to="/org/node" className="text-sm text-primary-text underline">
             {t("orgtree.back_to_root")}
           </Link>
         }
@@ -459,7 +459,7 @@ export function NodePage(): JSX.Element {
               ) : (
                 <Link
                   to={`/org/node/${step.id}`}
-                  className="inline-flex min-h-11 items-center px-1 text-accent-text hover:underline"
+                  className="inline-flex min-h-11 items-center px-1 text-primary-text hover:underline"
                 >
                   {nodeLabel(step, locale)}
                 </Link>
@@ -482,7 +482,7 @@ export function NodePage(): JSX.Element {
         <Pill>{t("orgtree.counts", { seats: seats.length, staffed })}</Pill>
         <Link
           to={`/org/work?node=${node.id}`}
-          className="inline-flex min-h-11 items-center rounded-lg border border-hairline px-3 text-sm font-medium text-accent-text hover:bg-surface-muted"
+          className="inline-flex min-h-11 items-center rounded-lg border border-hairline px-3 text-sm font-medium text-primary-text hover:bg-surface-muted"
         >
           {t("nav.work")}
         </Link>

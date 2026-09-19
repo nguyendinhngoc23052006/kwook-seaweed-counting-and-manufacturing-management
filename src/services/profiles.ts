@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
 import type { Person, PersonProfilePatch } from "./people";
-import type { Position, Rank } from "./positions";
+import type { Position } from "./positions";
+import type { Rank } from "./ranks";
 
 // Local type definitions: this repo has no generated src/types/database.ts.
 // Named to match the source repo's export names (getMyProfile, updateMyProfile)

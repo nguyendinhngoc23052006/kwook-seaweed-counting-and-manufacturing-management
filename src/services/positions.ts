@@ -2,17 +2,6 @@ import { supabase } from "../lib/supabaseClient";
 
 // Local type definitions: this repo has no generated src/types/database.ts.
 // Named to match the source repo exactly so other ported files resolve them.
-export interface Rank {
-  id: string;
-  key: string;
-  name_vi: string;
-  name_en: string | null;
-  ordinal: number;
-  active: boolean;
-  created_at: string;
-  created_by: string | null;
-}
-
 export interface Position {
   id: string;
   node_id: string;
@@ -25,18 +14,6 @@ export interface Position {
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
-}
-
-// Ordered by ordinal because that is the ordinal's only job outside the one
-// coherence check in the database. Nothing here reads its value.
-export async function listRanks(): Promise<Rank[]> {
-  const { data, error } = await supabase()
-    .from("ranks")
-    .select("*")
-    .eq("active", true)
-    .order("ordinal");
-  if (error) throw error;
-  return (data ?? []) as Rank[];
 }
 
 // The OFFICE doorway's first half: the seat is created and stands empty until
@@ -62,6 +39,54 @@ export async function createPosition(input: {
       title_en: input.titleEn?.trim() || null,
       reports_to_position_id: input.reportsToPositionId,
     })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Position;
+}
+
+// The half of the seat's life the app never had: a seat could be created,
+// filled, vacated and moved, but its own settings -- what it is called and
+// what rank it carries -- could never be changed. The row always allowed it
+// (positions_update, org_foundation.sql:1700); nothing ever wrote it.
+//
+// Authority is the database's, not this function's: org_guard_positions
+// refuses your own seat, demands appoint reach on the node, and since
+// 20260926000000 refuses a seat that is not strictly below your own rank in
+// both its old and its new form.
+export async function updatePosition(input: {
+  positionId: string;
+  title: string;
+  titleEn?: string | null;
+  rankId: string;
+}): Promise<Position> {
+  const title = input.title.trim();
+  if (!input.positionId) throw new Error("position required");
+  if (!title) throw new Error("position title required");
+  if (!input.rankId) throw new Error("rank required");
+  const { data, error } = await supabase()
+    .from("positions")
+    .update({
+      title,
+      title_en: input.titleEn?.trim() || null,
+      rank_id: input.rankId,
+    })
+    .eq("id", input.positionId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Position;
+}
+
+// Retiring a seat is dating it, not deleting it: the holders who ever sat in
+// it keep their history and the audit keeps the row. The guard refuses a seat
+// that still has live reports, so the caller moves them first.
+export async function abolishPosition(positionId: string): Promise<Position> {
+  if (!positionId) throw new Error("position required");
+  const { data, error } = await supabase()
+    .from("positions")
+    .update({ abolished_at: new Date().toISOString() })
+    .eq("id", positionId)
     .select("*")
     .single();
   if (error) throw error;

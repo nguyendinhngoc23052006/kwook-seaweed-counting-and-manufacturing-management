@@ -55,7 +55,7 @@ export function UnitSettingsPage(): JSX.Element {
       <div>
         <Link
           to={`/org/node/${nodeId}`}
-          className="inline-flex min-h-11 items-center text-sm text-accent-text hover:underline"
+          className="inline-flex min-h-11 items-center text-sm text-primary-text hover:underline"
         >
           {t("unit.back_to_node")}
         </Link>
@@ -114,7 +114,7 @@ export function UnitSettingsPage(): JSX.Element {
         <div className="mt-4">
           <Link
             to={`/org/node/${nodeId}/cameras`}
-            className="text-sm font-medium text-accent-text hover:underline"
+            className="text-sm font-medium text-primary-text hover:underline"
           >
             {t("unit.view_cameras")}
           </Link>

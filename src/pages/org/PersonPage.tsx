@@ -150,7 +150,7 @@ export function PersonPage(): JSX.Element {
     <div className="space-y-6">
       <div>
         {nodeId && (
-          <Link to={`/org/node/${nodeId}`} className="text-sm text-accent-text hover:underline">
+          <Link to={`/org/node/${nodeId}`} className="text-sm text-primary-text hover:underline">
             ← {t("person_page.back_to_node")}
           </Link>
         )}

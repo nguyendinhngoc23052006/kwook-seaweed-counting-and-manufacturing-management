@@ -136,8 +136,8 @@ function NodeBox({
       // pointer-based pan, which fires a pointercancel and kills the drag
       // outright (most real drags begin on a node box, not empty space).
       draggable={false}
-      className={`inline-block min-w-44 max-w-64 rounded-lg border bg-surface-raised px-3 py-2 text-left shadow-sm transition hover:border-accent hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-        matched ? "border-accent ring-2 ring-accent/40" : "border-hairline"
+      className={`inline-block min-w-44 max-w-64 rounded-lg border bg-surface-raised px-3 py-2 text-left shadow-sm transition hover:border-primary hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        matched ? "border-primary ring-2 ring-primary/40" : "border-hairline"
       }`}
     >
       <div className="text-sm font-bold text-ink">{nodeLabel(node, locale)}</div>
@@ -228,7 +228,7 @@ function Branch({
           type="button"
           onClick={() => onToggle(node.id)}
           aria-expanded={show}
-          className="mt-1 inline-flex min-h-8 items-center rounded-full border border-hairline bg-surface-raised px-3 text-xs font-medium text-accent-text transition hover:border-accent"
+          className="mt-1 inline-flex min-h-8 items-center rounded-full border border-hairline bg-surface-raised px-3 text-xs font-medium text-primary-text transition hover:border-primary"
         >
           {show ? t("orgchart.collapse") : t("orgchart.expand", { count: buried })}
         </button>

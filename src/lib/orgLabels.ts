@@ -1,6 +1,6 @@
 import type { NodeNature, OrgTreeNode } from "../services/nodes";
 import type { Person } from "../services/people";
-import type { Rank } from "../services/positions";
+import type { Rank } from "../services/ranks";
 
 // Names the CEO types at runtime live in the data, in both languages; no
 // reviewer sees them, so there is no i18n key to fall back on. English falls
