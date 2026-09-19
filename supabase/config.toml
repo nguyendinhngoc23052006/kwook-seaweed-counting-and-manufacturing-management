@@ -440,7 +440,8 @@ enabled = true
 [functions.pair-claim]
 enabled = true
 # The platform verifies the caller's JWT before the function runs; the function
-# additionally checks the caller is a human admin.
+# additionally checks, with the caller's OWN token, that they may manage cameras
+# at the unit they are claiming the camera into.
 verify_jwt = true
 
 # Signalling proxy for the live wall view: it holds the Cloudflare Realtime App
@@ -450,14 +451,6 @@ verify_jwt = true
 # own. With REALTIME_SFU_APP_ID / REALTIME_SFU_APP_SECRET unset it answers
 # { configured: false } and the whole feature stays inert.
 [functions.stream-signal]
-enabled = true
-verify_jwt = true
-
-# Creates the real Supabase Auth account behind a camera device -- something
-# only the Admin API can do, never plain RLS. The platform verifies the
-# caller's JWT; the function additionally re-checks the caller holds
-# manage_camera_devices before it ever switches to the service role.
-[functions.create-camera-device]
 enabled = true
 verify_jwt = true
 

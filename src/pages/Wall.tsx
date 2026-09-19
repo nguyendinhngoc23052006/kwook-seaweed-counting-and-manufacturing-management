@@ -106,8 +106,8 @@ export default function Wall({ profile }: { profile: Profile }) {
 
       try {
         const [stationResult, lineResult, openSessions, minuteResult] = await Promise.all([
-          supabase().from("stations").select("id, name, line_id").order("name"),
-          supabase().from("lines").select("id, name").order("name"),
+          supabase().from("camera_stations").select("id, name, line_id").order("name"),
+          supabase().from("camera_lines").select("id, name").order("name"),
           // No devices read: a session carries the phone's label and its own
           // evidence, and revoking a phone closes its sessions in the database
           // (migration 20260916170000), so an open session is a live camera.

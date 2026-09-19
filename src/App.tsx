@@ -18,10 +18,7 @@ const PublicJobsApp = lazy(() =>
 const Admin = lazy(() => import("./pages/Admin"));
 const AttendanceCamera = lazy(() => import("./pages/AttendanceCamera"));
 const Capture = lazy(() => import("./pages/Capture"));
-const Claim = lazy(() => import("./pages/Claim"));
-const Demo = lazy(() => import("./pages/Demo"));
 const Pair = lazy(() => import("./pages/Pair"));
-const Scan = lazy(() => import("./pages/Scan"));
 const Station = lazy(() => import("./pages/Station"));
 const Stations = lazy(() => import("./pages/Stations"));
 const Wall = lazy(() => import("./pages/Wall"));
@@ -71,16 +68,8 @@ export default function App() {
 
   const pathname = window.location.pathname;
 
-  // The demo is camera-only: no database reads, no writes, no device row. It
-  // renders before the auth gate so the counter can be shown on any phone.
-  if (pathname === "/demo")
-    return (
-      <Suspense fallback={<PageLoading />}>
-        <Demo />
-      </Suspense>
-    );
-  // Pairing renders before the auth gate too: a camera-to-be has no session -
-  // it shows a QR and receives one when an admin claims it.
+  // Pairing renders before the auth gate: a camera-to-be has no session - it
+  // shows a QR and receives one when a manager claims it.
   if (pathname === "/pair")
     return (
       <Suspense fallback={<PageLoading />}>
@@ -101,7 +90,7 @@ export default function App() {
   // Everything that isn't one of the internal employee/device routes above
   // is the public careers site, including the bare domain root: a stranger
   // sharing this URL is sharing it for the job board, not an internal login
-  // screen. No account, no gate -- same reason /demo and /pair skip it.
+  // screen. No account, no gate -- same reason /pair skips it.
   //
   // /login is a staff path, not public -- but it must NOT hard-render <Login/>
   // here. Login's own submit handler does window.location.reload() on the SAME
@@ -116,8 +105,6 @@ export default function App() {
     "/wall",
     "/stations",
     "/admin",
-    "/claim",
-    "/scan",
     "/login",
     "/attendance",
   ]);
@@ -194,9 +181,6 @@ export default function App() {
           <Route path="/stations" element={<Stations profile={profile} />} />
           <Route path="/station/:id" element={<Station profile={profile} />} />
           <Route path="/admin" element={<Admin profile={profile} />} />
-          <Route path="/claim" element={<Claim profile={profile} />} />
-          <Route path="/scan" element={<Scan profile={profile} />} />
-          <Route path="/demo" element={<Demo />} />
           <Route
             path="*"
             element={

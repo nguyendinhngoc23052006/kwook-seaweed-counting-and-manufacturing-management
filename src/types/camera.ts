@@ -40,12 +40,6 @@ export interface CameraStation {
   created_at: string;
 }
 
-export interface CreatedCameraDevice {
-  deviceId: string;
-  email: string;
-  password: string;
-}
-
 // The two camera capability keys left after 20260921000000_camera_export.sql
 // retired export_camera_data: viewing a node's camera data implies exporting
 // it, so there is no separate export key to hold.

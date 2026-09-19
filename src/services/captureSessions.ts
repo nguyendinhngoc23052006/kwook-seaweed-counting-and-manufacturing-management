@@ -2,8 +2,8 @@ import { supabase } from "../lib/supabaseClient";
 
 // A camera is a stretch of recording, not a permanent fixture. The open session
 // row is the ONLY statement of what a phone is doing now - but WHERE it is and
-// WHAT it does are the owner's to decide, held on the devices row and copied
-// onto the session by the server (migration 20260917092000). No open session
+// WHAT it does are the owner's to decide, held on the camera_devices row and
+// copied onto the session by the server (migration 20261005000000). No open session
 // means the camera is off the line in that instant, not ageing towards stale.
 export interface CaptureSession {
   id: string;
@@ -55,12 +55,15 @@ const SESSION_COLUMNS =
 // session this same phone still holds is RESUMED (loadOpenSession), not
 // restarted, which is why the one-open-per-device index rejecting this insert
 // is the correct answer rather than a problem to clear out of the way.
+// algorithmVersion is null while no counter is attached: the session records
+// which algorithm produced its rows, and "none" is the truthful answer, not a
+// version string for software that is not running.
 export async function startSession(input: {
   deviceId: string;
-  algorithmVersion: string;
+  algorithmVersion: string | null;
 }): Promise<CaptureSession> {
   const { data, error } = await supabase()
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .insert({
       device_id: input.deviceId,
       algorithm_version: input.algorithmVersion,
@@ -79,7 +82,7 @@ export async function startSession(input: {
 // relabelled "signed_out" by a phone that comes back to finish its shutdown.
 export async function endSession(sessionId: string, reason: EndReason): Promise<void> {
   const { error } = await supabase()
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .update({ ended_at: new Date().toISOString(), end_reason: reason })
     .eq("id", sessionId)
     .is("ended_at", null);
@@ -88,29 +91,30 @@ export async function endSession(sessionId: string, reason: EndReason): Promise<
 
 // What this camera has been assigned, read one table at a time.
 //
-// lineName comes back null for a device: `lines` has no device read policy
-// (migration 20260917091000, deliberately - a camera does not get to list the
-// factory), so the query returns no row rather than an error. A camera learns
-// its line from the line_name its own session carries; an owner's screen, which
-// may read lines, gets the name here.
+// A device CAN now read the stations and lines on its own node and only its own
+// node (migration 20261005000000), so this resolves for a camera as well as for
+// an owner's screen. The session's own frozen line_name is still the record;
+// this is the live name, for display.
 export async function loadAssignment(deviceId: string): Promise<DeviceAssignment> {
   const { data, error } = await supabase()
-    .from("devices")
-    .select("camera_function, station_id")
+    .from("camera_devices")
+    .select("role, station_id")
     .eq("id", deviceId)
     .single();
   if (error) throw error;
-  const device = data as { camera_function: string; station_id: string | null };
+  // camera_devices still calls a camera's job `role`; the session column kept
+  // the better name. One rename, one PR - not this one.
+  const device = data as { role: string; station_id: string | null };
   const assignment: DeviceAssignment = {
     lineName: null,
     stationId: device.station_id,
     stationName: null,
-    cameraFunction: device.camera_function,
+    cameraFunction: device.role,
   };
   if (!assignment.stationId) return assignment;
 
   const { data: stationRow, error: stationError } = await supabase()
-    .from("stations")
+    .from("camera_stations")
     .select("name, line_id")
     .eq("id", assignment.stationId)
     .maybeSingle();
@@ -121,7 +125,7 @@ export async function loadAssignment(deviceId: string): Promise<DeviceAssignment
   if (!station.line_id) return assignment;
 
   const { data: lineRow, error: lineError } = await supabase()
-    .from("lines")
+    .from("camera_lines")
     .select("name")
     .eq("id", station.line_id)
     .maybeSingle();
@@ -134,7 +138,7 @@ export async function loadAssignment(deviceId: string): Promise<DeviceAssignment
 // most one row, so a second one is a database fault, not a case to handle.
 export async function loadOpenSession(deviceId: string): Promise<CaptureSession | null> {
   const { data, error } = await supabase()
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .select(SESSION_COLUMNS)
     .eq("device_id", deviceId)
     .is("ended_at", null)
@@ -148,7 +152,7 @@ export async function loadOpenSession(deviceId: string): Promise<CaptureSession 
 // count, since a device holds at most one open session.
 export async function loadOpenSessions(): Promise<CaptureSession[]> {
   const { data, error } = await supabase()
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .select(SESSION_COLUMNS)
     .is("ended_at", null)
     .order("started_at", { ascending: false });
@@ -161,7 +165,7 @@ export async function loadRecentSessions(
   limit: number,
 ): Promise<CaptureSession[]> {
   const { data, error } = await supabase()
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .select(SESSION_COLUMNS)
     .eq("device_id", deviceId)
     .order("started_at", { ascending: false })

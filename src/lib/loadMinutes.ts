@@ -35,7 +35,7 @@ export async function loadMinutesSince(
   const rows: MinuteRow[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    let query = supabase().from("count_minutes").select(COLUMNS).gte("minute", fromIso);
+    let query = supabase().from("camera_count_minutes").select(COLUMNS).gte("minute", fromIso);
     if (stationId) query = query.eq("station_id", stationId);
 
     const offset = page * PAGE;

@@ -3,8 +3,8 @@ import { type JSX, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AttendanceConfigDialog } from "../../components/org/AttendanceConfigDialog";
 import { CameraStationsPanel } from "../../components/org/CameraStationsPanel";
-import { CreateCameraDeviceDialog } from "../../components/org/CreateCameraDeviceDialog";
 import { EditCameraDeviceDialog } from "../../components/org/EditCameraDeviceDialog";
+import { PairCameraDialog } from "../../components/org/PairCameraDialog";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -213,9 +213,7 @@ export function CamerasPage(): JSX.Element {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold text-ink">{t("device.admin_title")}</h1>
-        {canManage && (
-          <Button onClick={() => setCreateOpen(true)}>{t("device.admin_create")}</Button>
-        )}
+        {canManage && <Button onClick={() => setCreateOpen(true)}>{t("pair.dialog_title")}</Button>}
       </div>
 
       {devices.isLoading ? (
@@ -256,11 +254,11 @@ export function CamerasPage(): JSX.Element {
       )}
 
       {nodeId && (
-        <CreateCameraDeviceDialog
+        <PairCameraDialog
           nodeId={nodeId}
           open={createOpen}
           onClose={() => setCreateOpen(false)}
-          onCreated={() =>
+          onPaired={() =>
             queryClient.invalidateQueries({
               queryKey: ["cameras", "devices", nodeId],
             })
