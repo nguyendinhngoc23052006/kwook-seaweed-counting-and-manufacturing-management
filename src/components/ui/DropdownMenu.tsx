@@ -16,8 +16,14 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         align={align}
         sideOffset={sideOffset}
+        collisionPadding={8}
         className={cn(
-          "z-50 min-w-44 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          // `overflow-hidden` alone made a menu taller than the viewport
+          // unreachable: it grew off the bottom of the screen and clipped the
+          // rest away with no way to scroll to it. Radix measures the room it
+          // actually has into --radix-dropdown-menu-content-available-height,
+          // so the menu is capped at that and scrolls inside itself instead.
+          "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           className,
         )}
         {...props}

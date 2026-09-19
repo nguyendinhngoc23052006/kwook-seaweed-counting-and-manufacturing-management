@@ -4,8 +4,16 @@ import { cn } from "../../lib/utils";
 
 // Tinted background plus AA-safe ink, from the token triplets -- not the raw
 // Tailwind palette, which does not follow the theme and has no dark mode here.
+//
+// A flex row, NOT a grid. The grid this replaces was `grid-cols-[0_1fr]` with
+// its children placed at `col-start-2`, which only works if every child is one
+// of those children. 65 of this component's 68 callers pass a bare string, and
+// a bare string is an ANONYMOUS item: it landed in column one, which is 0px
+// wide, so every error and warning banner in the hub wrapped one word per line.
+// In a flex row an anonymous item is a real flex item that fills the row and
+// wraps like prose, and an icon child still sits beside it.
 const alertVariants = cva(
-  "grid w-full grid-cols-[0_1fr] items-start gap-y-1 rounded-lg border p-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5",
+  "flex w-full items-start gap-3 rounded-lg border p-3 text-sm [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:translate-y-0.5",
   {
     variants: {
       variant: {
@@ -32,10 +40,9 @@ export function Alert({ className, variant, ...props }: AlertProps) {
   );
 }
 
-export function AlertTitle({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("col-start-2 font-medium", className)} {...props} />;
-}
-
+// For an alert whose body is more than one sentence -- it takes the row's free
+// space so its own children stack, and `min-w-0` lets it shrink rather than
+// forcing the banner wider than its container.
 export function AlertDescription({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("col-start-2 text-sm", className)} {...props} />;
+  return <div className={cn("min-w-0 flex-1", className)} {...props} />;
 }

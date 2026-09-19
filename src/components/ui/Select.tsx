@@ -60,7 +60,7 @@ export function Select<T extends string = string>({
           />
         </div>
       )}
-      <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain sm:max-h-60">
+      <CommandList className="max-h-[60vh] overflow-y-auto overscroll-contain sm:max-h-[min(15rem,var(--radix-popover-content-available-height,15rem))]">
         <CommandEmpty className="px-3 py-6 text-center text-sm text-muted-foreground">
           {t("common.no_results")}
         </CommandEmpty>
@@ -135,10 +135,15 @@ export function Select<T extends string = string>({
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         {/* --radix-popover-trigger-width matches the panel to the field; the
-            version this replaces measured it by hand on every window resize. */}
+            version this replaces measured it by hand on every window resize.
+            The list is capped at --radix-popover-content-available-height too:
+            with a flat 15rem the panel could not fit under a field low in a
+            dialog, so Radix flipped it ABOVE the trigger and it covered the
+            whole form. Capped, it stays put and scrolls. */}
         <PopoverPrimitive.Content
           align="start"
           sideOffset={4}
+          collisionPadding={8}
           className="z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         >
           {list}

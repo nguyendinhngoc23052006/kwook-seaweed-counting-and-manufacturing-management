@@ -167,7 +167,7 @@ export default function Station({ profile }: { profile: Profile }) {
         <div className="stack">
           {banner}
           <div className="skeleton h1">Loading station</div>
-          <div className="grid">
+          <div className="floor-grid">
             <div className="card">
               <div className="stack">
                 <div className="skeleton">Loading</div>
@@ -264,7 +264,7 @@ export default function Station({ profile }: { profile: Profile }) {
           </div>
         )}
 
-        <div className="grid">
+        <div className="floor-grid">
           <div className="card">
             <div className="stack">
               <div className="label">Today</div>
