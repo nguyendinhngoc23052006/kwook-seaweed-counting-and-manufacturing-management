@@ -103,9 +103,11 @@ Deno.serve(async (req) => {
   if (caller.kind !== "device") return reply(403, { error: "Cameras publish, people watch" });
 
   // Unpairing is a row, not a phone: a revoked device keeps its token until it
-  // expires, so every privileged path re-reads revoked_at.
+  // expires, so every privileged path re-reads revoked_at. An ARCHIVED camera
+  // reads back nothing at all -- its own select policy filters it -- so hiding
+  // one stops it streaming by the same check, with nothing extra to remember.
   const { data: device, error: deviceError } = await asCaller
-    .from("devices")
+    .from("camera_devices")
     .select("id, revoked_at")
     .eq("id", callerId)
     .maybeSingle();
@@ -128,7 +130,7 @@ Deno.serve(async (req) => {
     // Scoped to this device's own open rows, so a camera can only ever close
     // its own stream and can never relabel one that is already closed.
     const { error } = await service
-      .from("stream_sessions")
+      .from("camera_stream_sessions")
       .update({ ended_at: new Date().toISOString(), end_reason: "stopped" })
       .eq("id", streamSessionId)
       .eq("device_id", callerId)
@@ -151,7 +153,7 @@ Deno.serve(async (req) => {
   // Streaming is per capture session: the run has to be this camera's own, and
   // it has to still be open. A phone with no recording run has nothing to show.
   const { data: captureSession, error: captureError } = await asCaller
-    .from("capture_sessions")
+    .from("camera_capture_sessions")
     .select("id")
     .eq("id", captureSessionId)
     .eq("device_id", callerId)
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
 
   // Who streamed, and when. No media touches Supabase.
   const { data: streamSession, error: streamError } = await service
-    .from("stream_sessions")
+    .from("camera_stream_sessions")
     .insert({ device_id: callerId })
     .select("id")
     .single();
