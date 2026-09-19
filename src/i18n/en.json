@@ -793,5 +793,7 @@
   "sysadmins.email_hint": "They must have signed in at least once, so the account exists.",
   "sysadmins.last_one": "This is the only administrator. Appoint a second one before standing anybody down — the system cannot be administered with none.",
   "sysadmins.appoint_failed": "Could not appoint that account.",
-  "sysadmins.retire_failed": "Could not stand that account down."
+  "sysadmins.retire_failed": "Could not stand that account down.",
+  "people.unseated": "Not in a seat",
+  "people.unseated_hint": "People with no chair anywhere. Without this list they would be unreachable — every other route to a person goes through a seat."
 }

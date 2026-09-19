@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { JSX } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Card } from "../../components/ui/Card";
+import { Card, CardTitle } from "../../components/ui/Card";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
 import { Pill } from "../../components/ui/Pill";
 import { ListSkeleton } from "../../components/ui/Skeleton";
@@ -56,6 +56,16 @@ export function UnitPeoplePage(): JSX.Element {
   const seats = [...node.seats].sort((a, b) => a.rank_ordinal - b.rank_ordinal);
   const personStatuses = personStatusById(persons.data ?? []);
 
+  // Everyone this page could reach, minus everyone who is sitting somewhere.
+  // Without this a vacated person disappears from the app completely: every
+  // route to a person runs through a seat row, so their profile, their bank
+  // details and their face enrolment become unreachable the moment their chair
+  // is emptied -- and vacating is one button on the seat beside this one.
+  const seatedIds = new Set(
+    (tree.data ?? []).flatMap((n) => n.seats.map((s2) => s2.person_id).filter(Boolean)),
+  );
+  const unseated = (persons.data ?? []).filter((person) => !seatedIds.has(person.id));
+
   return (
     <div className="space-y-6">
       <div>
@@ -109,6 +119,33 @@ export function UnitPeoplePage(): JSX.Element {
           </div>
         )}
       </Card>
+
+      {unseated.length > 0 && (
+        <Card>
+          <CardTitle>{t("people.unseated")}</CardTitle>
+          <p className="mb-3 text-sm text-muted-foreground">{t("people.unseated_hint")}</p>
+          <div className="space-y-2">
+            {unseated.map((person) => {
+              const tone = seatOccupantStatusTone(personStatuses.get(person.id));
+              return (
+                <div
+                  key={person.id}
+                  className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
+                >
+                  <Link
+                    to={`/org/node/${nodeId}/person/${person.id}`}
+                    className="min-w-0 flex-1 truncate text-sm font-medium text-primary-text hover:underline"
+                  >
+                    {person.full_name}
+                    {person.employee_code ? ` · ${person.employee_code}` : ""}
+                  </Link>
+                  {tone && <Pill tone={tone}>{t(`person_status.${person.status}`)}</Pill>}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -793,5 +793,7 @@
   "sysadmins.email_hint": "Họ phải đăng nhập ít nhất một lần để tài khoản tồn tại.",
   "sysadmins.last_one": "Đây là quản trị viên duy nhất. Hãy bổ nhiệm người thứ hai trước khi cho ai thôi quyền — hệ thống không thể không có quản trị viên nào.",
   "sysadmins.appoint_failed": "Không bổ nhiệm được tài khoản đó.",
-  "sysadmins.retire_failed": "Không cho tài khoản đó thôi quyền được."
+  "sysadmins.retire_failed": "Không cho tài khoản đó thôi quyền được.",
+  "people.unseated": "Chưa có vị trí",
+  "people.unseated_hint": "Những người hiện không giữ vị trí nào. Không có mục này thì không còn đường nào tới họ — mọi lối khác đều đi qua một vị trí."
 }
