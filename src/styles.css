@@ -82,9 +82,6 @@ body {
   font-size: 1rem;
   line-height: 1.5;
 }
-a {
-  color: var(--accent);
-}
 img,
 video {
   max-width: 100%;
@@ -98,47 +95,6 @@ video {
 :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
-}
-
-/* --------------------------------------------------------------------------
-   LEGACY — bare elements on pages not yet moved onto the classes above.
-   Delete this block once every page uses .btn / .field__input / .table.
-   -------------------------------------------------------------------------- */
-
-button {
-  font: inherit;
-  min-height: var(--tap);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-  cursor: pointer;
-}
-button.secondary {
-  background: transparent;
-  color: var(--accent);
-}
-input,
-select,
-textarea {
-  font: inherit;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--rule);
-  background: var(--surface);
-  color: var(--ink);
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-table th,
-table td {
-  text-align: left;
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--rule);
 }
 
 /* --------------------------------------------------------------------------
@@ -184,7 +140,14 @@ table td {
   color: var(--ink);
   text-decoration: none;
 }
-.truncate {
+/* NOT `.truncate`. Tailwind ships a `truncate` utility that sets overflow,
+   text-overflow and white-space but NOT min-width, so a `min-width: 0` here
+   applied to every hub element carrying the utility -- uncontested, because
+   layers only rank the same property. The hub happened to want it, which is
+   worse than not wanting it: the dependency was invisible and one edit here
+   would have broken truncation across the shell. The hub now asks for
+   `min-w-0` where it needs it; this is the floor's own copy. */
+.floor-truncate {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -762,86 +725,5 @@ input[type="radio"] {
   }
   .spinner {
     animation-duration: 2.4s;
-  }
-}
-
-/* --------------------------------------------------------------------------
-   TABLE
-   -------------------------------------------------------------------------- */
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-.table th {
-  padding: var(--space-3);
-  text-align: left;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--rule);
-}
-.table td {
-  padding: var(--space-3);
-  text-align: left;
-  vertical-align: top;
-  border-bottom: 1px solid var(--rule);
-}
-.table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-/* Phone: each row becomes a small card and every cell carries its own header,
-   read from data-label. A cell without one just spans the width. */
-@media (max-width: 640px) {
-  .table,
-  .table tbody,
-  .table tr,
-  .table td {
-    display: block;
-  }
-  .table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .table tr {
-    margin-bottom: var(--space-3);
-    border: 1px solid var(--rule);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-  }
-  .table tr:last-child {
-    margin-bottom: 0;
-  }
-  .table td {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-    text-align: right;
-    border-bottom: 1px solid var(--rule);
-  }
-  .table td:not([data-label]) {
-    text-align: left;
-  }
-  .table td:last-child {
-    border-bottom: none;
-  }
-  .table td[data-label]::before {
-    content: attr(data-label);
-    flex: 0 0 auto;
-    text-align: left;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-soft);
   }
 }

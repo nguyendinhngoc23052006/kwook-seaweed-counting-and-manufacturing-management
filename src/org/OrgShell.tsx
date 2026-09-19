@@ -120,7 +120,7 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
       )}
     >
       <Icon className={cn("size-4 shrink-0", active && "text-primary")} />
-      <span className="flex-1 truncate">{item.label}</span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.badge ? (
         <Pill tone="danger" className="tabular-nums">
           {item.badge > 99 ? "99+" : item.badge}
@@ -155,7 +155,7 @@ function OrgMark({ orgName }: { orgName: string }) {
       <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
         {orgName.trim().charAt(0).toUpperCase() || "K"}
       </div>
-      <span className="truncate font-display text-base font-semibold text-foreground">
+      <span className="min-w-0 truncate font-display text-base font-semibold text-foreground">
         {orgName}
       </span>
     </div>
@@ -265,7 +265,7 @@ export function OrgShell({
               </div>
             </SheetContent>
           </Sheet>
-          <span className="truncate font-display text-base font-semibold">{orgName}</span>
+          <span className="min-w-0 truncate font-display text-base font-semibold">{orgName}</span>
           <Button
             variant="ghost"
             size="icon-sm"

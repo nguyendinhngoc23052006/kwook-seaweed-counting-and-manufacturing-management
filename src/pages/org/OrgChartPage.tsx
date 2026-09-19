@@ -331,7 +331,7 @@ export function activeSubtreeOnly(nodes: OrgTreeNode[]): OrgTreeNode[] {
 export function OrgChartPage(): JSX.Element {
   const { t, locale } = useI18n();
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
-  const [showArchived, setShowArchived] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const toggle = (id: string) =>
     setOpened((prev) => {
       const next = new Set(prev);
@@ -445,6 +445,14 @@ export function OrgChartPage(): JSX.Element {
     zoomRef.current = 1;
     inner.style.zoom = "1";
 
+    // Then land on the company, not on empty space. The tree is a centred
+    // nested flex layout, so the root box sits at the horizontal MIDPOINT of
+    // content that is routinely many screens wide -- and a fresh scroll
+    // container starts at scrollLeft 0, which is the far-left edge, where
+    // there is nothing above the leftmost leaf but the blank area under its
+    // connector. On a phone that is the entire first screen.
+    pane.scrollLeft = Math.max(0, (pane.scrollWidth - pane.clientWidth) / 2);
+
     function applyPendingWheel() {
       if (!pane || !inner) return;
       const pending = pendingWheel.current;
@@ -476,6 +484,13 @@ export function OrgChartPage(): JSX.Element {
     }
 
     function handleWheel(e: WheelEvent) {
+      // Zoom is the ctrl/meta gesture only -- which is also what a trackpad
+      // pinch arrives as. Swallowing every wheel event turned the one way to
+      // scroll a tree that is routinely several screens tall into a zoom, so
+      // a trackpad could not move around the chart at all and browser page
+      // zoom was blocked over it. Plain wheel now falls through to the
+      // overflow-auto pane, which is what it was already sized for.
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const existing = pendingWheel.current;
       if (existing) {
@@ -523,9 +538,16 @@ export function OrgChartPage(): JSX.Element {
   // children index, the roots list) ever sees the snapshot -- a hidden branch
   // is absent from every one of them rather than threaded through as a prop.
   const visibleNodes = useMemo(
-    () => (showArchived ? nodes : activeSubtreeOnly(nodes)),
-    [nodes, showArchived],
+    () => (showInactive ? nodes : activeSubtreeOnly(nodes)),
+    [nodes, showInactive],
   );
+  // Counts the units that were actually DEACTIVATED, not every node the
+  // filter hides. activeSubtreeOnly also drops a live team sitting under a
+  // deactivated department, and reporting those as deactivated would be a
+  // lie -- this app keeps "ngung hoat dong" (off the default view, still on
+  // the chart) and "xoa"/archive (gone from every screen) as separate facts,
+  // so the label has to mean exactly one of them.
+  const inactiveCount = useMemo(() => nodes.filter((n) => !n.active).length, [nodes]);
   // Rebuilt only when the visible snapshot changes, not per keystroke --
   // matching itself is then a plain substring scan over already-folded text.
   const searchIndex = useMemo(() => buildSearchIndex(visibleNodes), [visibleNodes]);
@@ -574,11 +596,13 @@ export function OrgChartPage(): JSX.Element {
             </p>
           )}
         </div>
-        <Checkbox
-          checked={showArchived}
-          onChange={setShowArchived}
-          label={t("orgchart.show_archived")}
-        />
+        {inactiveCount > 0 && (
+          <Checkbox
+            checked={showInactive}
+            onChange={setShowInactive}
+            label={t("orgchart.show_inactive_count", { count: inactiveCount })}
+          />
+        )}
       </div>
 
       {noResults ? (

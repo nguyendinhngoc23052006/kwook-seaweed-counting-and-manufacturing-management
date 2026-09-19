@@ -486,7 +486,7 @@
   "orgchart.search_empty": "Không tìm thấy",
   "orgchart.search_empty_hint": "Thử tên đơn vị, tên nhân sự, hoặc mã nhân viên.",
   "orgchart.search_placeholder": "Tìm đơn vị hoặc nhân sự…",
-  "orgchart.show_archived": "Hiện các đơn vị đã ngừng hoạt động",
+  "orgchart.show_inactive_count": "Hiện {count} đơn vị đã ngừng hoạt động",
   "orgchart.title": "Sơ đồ tổ chức",
   "orgtree.add_child": "Thêm đơn vị trực thuộc",
   "orgtree.add_person": "Thêm công nhân",

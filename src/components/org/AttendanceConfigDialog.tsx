@@ -139,8 +139,7 @@ export function AttendanceConfigDialog({
 
         <div>
           <Label>{t("attendance_config.zone")}</Label>
-          {/* Un-layered `.grid` in styles.css beats Tailwind's grid-cols-4; force columns inline instead. */}
-          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+          <div className="grid grid-cols-4 gap-2">
             <NumberField
               id="attendance-zone-x"
               label={t("attendance_config.zone_x")}
