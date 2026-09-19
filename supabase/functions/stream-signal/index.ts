@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
 
   const { data: caller, error: callerError } = await asCaller
     .from("profiles")
-    .select("tenant_id, kind")
+    .select("kind")
     .eq("id", callerId)
     .maybeSingle();
   if (callerError) return reply(500, { error: `Profile read failed: ${callerError.message}` });
@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
   // Who streamed, and when. No media touches Supabase.
   const { data: streamSession, error: streamError } = await service
     .from("stream_sessions")
-    .insert({ tenant_id: caller.tenant_id, device_id: callerId })
+    .insert({ device_id: callerId })
     .select("id")
     .single();
   if (streamError) return reply(500, { error: `Stream session: ${streamError.message}` });

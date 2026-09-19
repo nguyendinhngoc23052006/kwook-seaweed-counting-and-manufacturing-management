@@ -5,7 +5,6 @@ export type HumanRole = "pending" | "viewer" | "supervisor" | "manager" | "owner
 
 export interface Profile {
   id: string;
-  tenant_id: string;
   kind: "device" | "human";
   role: HumanRole;
   display_name: string;
@@ -13,7 +12,6 @@ export interface Profile {
 
 export interface DeviceConfig {
   id: string;
-  tenant_id: string;
   name: string;
   revoked_at: string | null;
 }
@@ -24,7 +22,7 @@ export interface DeviceConfig {
 export async function loadDeviceConfig(profileId: string): Promise<DeviceConfig | null> {
   const { data, error } = await supabase()
     .from("devices")
-    .select("id, tenant_id, name, revoked_at")
+    .select("id, name, revoked_at")
     .eq("id", profileId)
     .maybeSingle();
   if (error) throw error;
@@ -36,7 +34,7 @@ export async function loadProfile(): Promise<Profile | null> {
   if (!auth.user) return null;
   const { data, error } = await supabase()
     .from("profiles")
-    .select("id, tenant_id, kind, role, display_name")
+    .select("id, kind, role, display_name")
     .eq("id", auth.user.id)
     .maybeSingle();
   if (error) throw error;

@@ -53,7 +53,7 @@ function lineChoices(lines: LineRow[], selectedId: string): LineRow[] {
   return lines.filter((line) => line.active || line.id === selectedId);
 }
 
-// lines_tenant_name_key is on (tenant_id, lower(btrim(name))), so the database
+// lines_name_key is on lower(btrim(name)), so the database
 // is the only place that knows whether a name is taken - including by a retired
 // line the owner cannot see in the pickers.
 function lineWriteMessage(e: unknown, name: string): string {
@@ -235,9 +235,7 @@ export default function Stations({ profile }: { profile: Profile }) {
     if (!name) return;
 
     setBusy("new-line");
-    const { error: writeError } = await supabase()
-      .from("lines")
-      .insert({ tenant_id: profile.tenant_id, name });
+    const { error: writeError } = await supabase().from("lines").insert({ name });
     if (writeError) {
       setLineError(lineWriteMessage(writeError, name));
       setBusy(null);
@@ -296,10 +294,7 @@ export default function Stations({ profile }: { profile: Profile }) {
     if (!name || !lineId) return;
 
     setBusy("new");
-    // tenant_id is written by hand because station_owner_write's with-check
-    // compares it to the caller's tenant; the column has no default.
     const { error: writeError } = await supabase().from("stations").insert({
-      tenant_id: profile.tenant_id,
       name,
       line_id: lineId,
       kind,

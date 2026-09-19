@@ -195,7 +195,6 @@ export default function Capture({ profile }: { profile: Profile }) {
         table: "count_minutes",
         payload: {
           id,
-          tenant_id: device.tenant_id,
           device_id: device.id,
           // Where this camera is pointed comes from the session it is running,
           // never from the device row it was paired with.
@@ -420,7 +419,6 @@ export default function Capture({ profile }: { profile: Profile }) {
     if (!running || !config || !session) return;
     const timer = setInterval(async () => {
       await supabase().from("device_heartbeats").insert({
-        tenant_id: config.tenant_id,
         device_id: config.id,
         // What this camera is doing comes from the session it is running, never
         // from the device row it was paired with.
@@ -462,7 +460,6 @@ export default function Capture({ profile }: { profile: Profile }) {
     try {
       setSession(
         await startSession({
-          tenantId: config.tenant_id,
           deviceId: config.id,
           algorithmVersion: ALGORITHM_VERSION,
         }),

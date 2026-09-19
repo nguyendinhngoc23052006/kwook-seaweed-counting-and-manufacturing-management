@@ -652,5 +652,15 @@
   "profile.phone": "Số điện thoại",
   "profile.saved": "Đã lưu.",
   "profile.save_failed": "Không lưu được hồ sơ của bạn.",
-  "profile.load_failed": "Không tải được hồ sơ của bạn."
+  "profile.load_failed": "Không tải được hồ sơ của bạn.",
+  "firstrun.title": "Thiết lập tổ chức của bạn",
+  "firstrun.body": "Chưa có gì cả. Hãy bắt đầu bằng đơn vị cao nhất — chính công ty. Mọi thứ khác đều nằm dưới nó: phòng ban, tổ nhóm, vị trí và những người giữ vị trí đó.",
+  "firstrun.name_label": "Tên công ty hoặc đơn vị cao nhất",
+  "firstrun.name_placeholder": "Kwook",
+  "firstrun.create": "Tạo đơn vị",
+  "firstrun.failed": "Không tạo được đơn vị đầu tiên.",
+  "firstrun.not_ready_title": "Chưa được thiết lập",
+  "firstrun.not_ready_body": "Tổ chức này chưa được tạo. Quản trị viên cần tạo đơn vị cao nhất trước khi có thể xếp người vào.",
+  "noseat.title": "Chưa có vị trí",
+  "noseat.body": "Tài khoản của bạn đã tồn tại nhưng bạn chưa giữ vị trí nào trong tổ chức, nên chưa có gì để hiển thị. Hãy nhờ quản lý thêm bạn vào đơn vị của họ."
 }

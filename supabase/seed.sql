@@ -77,30 +77,27 @@ update profiles
 -- The demo floor. This used to live in migration 20260915080000, which meant
 -- production would have been born with it; 20260917100000 removed it there and
 -- it lives here instead, because a seed reaches preview branches only.
-insert into lines (tenant_id, name)
-select id, 'Line A' from tenants
-union all
-select id, 'Plant' from tenants
+insert into lines (name)
+values ('Line A'), ('Plant')
 on conflict do nothing;
 
--- stations carries no unique constraint on (tenant, name), so `on conflict`
--- has nothing to key on and a second seed run would duplicate the floor.
-insert into stations (tenant_id, line_id, name, kind)
-select t.id, l.id, f.name, f.kind
-  from tenants t
-  join (values ('Line A', 'Belt 1', 'Belt'),
+-- stations carries no unique constraint on name, so `on conflict` has nothing
+-- to key on and a second seed run would duplicate the floor.
+insert into stations (line_id, name, kind)
+select l.id, f.name, f.kind
+  from (values ('Line A', 'Belt 1', 'Belt'),
                ('Line A', 'Portioning 1', 'Tray table'),
-               ('Plant',  'Main door', 'Doorway')) as f(line, name, kind) on true
-  join lines l on l.tenant_id = t.id and l.name = f.line
+               ('Plant',  'Main door', 'Doorway')) as f(line, name, kind)
+  join lines l on l.name = f.line
  where not exists (
-   select 1 from stations s where s.tenant_id = t.id and s.name = f.name
+   select 1 from stations s where s.name = f.name
  );
 
 -- The ::uuid casts are required: INSERT ... SELECT does not coerce a string
 -- literal to the target column's type the way a plain VALUES insert does.
-insert into devices (id, tenant_id, name, camera_function, station_id)
-select '22222222-2222-2222-2222-222222222222'::uuid, s.tenant_id, 'cam-01', 'counting', s.id
+insert into devices (id, name, camera_function, station_id)
+select '22222222-2222-2222-2222-222222222222'::uuid, 'cam-01', 'counting', s.id
   from stations s where s.name = 'Belt 1'
 union all
-select '33333333-3333-3333-3333-333333333333'::uuid, s.tenant_id, 'cam-02', 'compliance', s.id
+select '33333333-3333-3333-3333-333333333333'::uuid, 'cam-02', 'compliance', s.id
   from stations s where s.name = 'Main door';

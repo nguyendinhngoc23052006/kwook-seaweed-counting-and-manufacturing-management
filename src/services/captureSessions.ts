@@ -7,7 +7,6 @@ import { supabase } from "../lib/supabaseClient";
 // means the camera is off the line in that instant, not ageing towards stale.
 export interface CaptureSession {
   id: string;
-  tenant_id: string;
   device_id: string;
   station_id: string | null;
   camera_function: string;
@@ -42,7 +41,7 @@ export interface DeviceAssignment {
 // algorithm_version is stored but not returned: it is provenance for the rows a
 // session produces, not something a screen renders.
 const SESSION_COLUMNS =
-  "id, tenant_id, device_id, station_id, camera_function, line_name, station_name, device_label, started_at, ended_at, end_reason, last_evidence_at";
+  "id, device_id, station_id, camera_function, line_name, station_name, device_label, started_at, ended_at, end_reason, last_evidence_at";
 
 // Placement is not sent. The before-insert trigger overwrites station_id and
 // camera_function from this device's own row, so a phone that named them would
@@ -57,14 +56,12 @@ const SESSION_COLUMNS =
 // restarted, which is why the one-open-per-device index rejecting this insert
 // is the correct answer rather than a problem to clear out of the way.
 export async function startSession(input: {
-  tenantId: string;
   deviceId: string;
   algorithmVersion: string;
 }): Promise<CaptureSession> {
   const { data, error } = await supabase()
     .from("capture_sessions")
     .insert({
-      tenant_id: input.tenantId,
       device_id: input.deviceId,
       algorithm_version: input.algorithmVersion,
     })
@@ -146,7 +143,7 @@ export async function loadOpenSession(deviceId: string): Promise<CaptureSession 
   return (data as CaptureSession | null) ?? null;
 }
 
-// Unfiltered by tenant on purpose: RLS scopes this to the caller's own tenant,
+// Unfiltered on purpose: RLS scopes this to what the caller may see,
 // and one device can only ever see its own row. Bounded by the paired device
 // count, since a device holds at most one open session.
 export async function loadOpenSessions(): Promise<CaptureSession[]> {

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   Link,
@@ -8,7 +8,11 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import { Alert } from "../components/ui/Alert";
 import { Button } from "../components/ui/Button";
+import { Empty } from "../components/ui/EmptyState";
+import { Input, Label } from "../components/ui/Input";
+import { Section } from "../components/ui/Section";
 import { errorMessage } from "../lib/errorMessage";
 import { I18nProvider, useI18n } from "../lib/i18n";
 import { queryClient } from "../lib/query";
@@ -27,6 +31,8 @@ import { UnitPage } from "../pages/org/UnitPage";
 import { UnitPeoplePage } from "../pages/org/UnitPeoplePage";
 import { UnitSettingsPage } from "../pages/org/UnitSettingsPage";
 import { WorkPage } from "../pages/org/WorkPage";
+import { createRootNode } from "../services/nodes";
+import { getMyProfile } from "../services/profiles";
 import { OrgErrorBoundary } from "./OrgErrorBoundary";
 
 async function signOut() {
@@ -38,8 +44,9 @@ async function signOut() {
 // tasks to follow) has no node-tree browsing page yet -- there is exactly one
 // node, the Kwook root, so every route defaults straight to it rather than
 // asking the owner to pick from a tree of one.
-function useRootNodeId(): { rootNodeId: string | null; error: string | null } {
+function useRootNodeId(): { rootNodeId: string | null; loading: boolean; error: string | null } {
   const [rootNodeId, setRootNodeId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,10 +59,69 @@ function useRootNodeId(): { rootNodeId: string | null; error: string | null } {
       .then(({ data, error: err }) => {
         if (err) setError(errorMessage(err));
         else setRootNodeId(data?.id ?? null);
+        setLoading(false);
       });
   }, []);
 
-  return { rootNodeId, error };
+  return { rootNodeId, loading, error };
+}
+
+// An organisation with no root node is not "loading" -- it is a business that
+// has not been set up yet. Before this, the hub rendered a spinner that never
+// resolved, so a fresh install had no first step and no way to reach one.
+function FirstRun() {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const me = useQuery({ queryKey: ["profile", "me"], queryFn: getMyProfile });
+
+  const create = useMutation({
+    mutationFn: () => createRootNode(name),
+    onSuccess: () => window.location.reload(),
+  });
+
+  if (me.isLoading) return <div className="p-6 text-sm text-ink-muted">{t("common.loading")}</div>;
+
+  if (!me.data?.isAdmin) {
+    return (
+      <div className="p-6">
+        <Empty title={t("firstrun.not_ready_title")} description={t("firstrun.not_ready_body")} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-lg p-6">
+      <Section title={t("firstrun.title")} description={t("firstrun.body")}>
+        <div className="space-y-3 py-2">
+          <Label htmlFor="firstrun-name">{t("firstrun.name_label")}</Label>
+          <Input
+            id="firstrun-name"
+            value={name}
+            placeholder={t("firstrun.name_placeholder")}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {create.isError && (
+            <Alert variant="error">{errorMessage(create.error, t("firstrun.failed"))}</Alert>
+          )}
+          <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()}>
+            {create.isPending ? t("common.loading") : t("firstrun.create")}
+          </Button>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+// A signed-in account with no seat and no admin rights has nothing to do in the
+// hub. It used to land in the full tab shell and hit an empty or failing page on
+// every tab; now it gets one honest screen.
+function NoSeat() {
+  const { t } = useI18n();
+  return (
+    <div className="p-6">
+      <Empty title={t("noseat.title")} description={t("noseat.body")} />
+    </div>
+  );
 }
 
 // The chart's tree can expand tall and wide enough that its own scrollbar
@@ -65,15 +131,22 @@ function useRootNodeId(): { rootNodeId: string | null; error: string | null } {
 const BOUNDED_CONTENT_ROUTES = ["/org/chart"];
 
 function OrgRoutes() {
-  const { rootNodeId, error } = useRootNodeId();
+  const { rootNodeId, loading, error } = useRootNodeId();
   const { pathname } = useLocation();
   const isBounded = BOUNDED_CONTENT_ROUTES.includes(pathname);
+  const me = useQuery({ queryKey: ["profile", "me"], queryFn: getMyProfile });
 
   if (error) {
     return <div className="p-6 text-sm text-danger-text">{error}</div>;
   }
-  if (!rootNodeId) {
+  if (loading || me.isLoading) {
     return <div className="p-6 text-sm text-ink-muted">Loading…</div>;
+  }
+  if (!rootNodeId) {
+    return <FirstRun />;
+  }
+  if (!me.data?.person && !me.data?.isAdmin) {
+    return <NoSeat />;
   }
 
   const routes = (

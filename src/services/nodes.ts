@@ -152,6 +152,21 @@ export async function createChildNode(input: {
   return data as OrgNode;
 }
 
+// The first unit in an empty organisation. Every other node hangs off a parent;
+// this one has none, which is exactly why createChildNode cannot make it and why
+// a fresh install had no way to begin.
+export async function createRootNode(name: string): Promise<OrgNode> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("node name required");
+  const { data, error } = await supabase()
+    .from("org_nodes")
+    .insert({ parent_id: null, name: trimmed, sort_order: 0 })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as OrgNode;
+}
+
 export async function renameNode(
   id: string,
   name: string,

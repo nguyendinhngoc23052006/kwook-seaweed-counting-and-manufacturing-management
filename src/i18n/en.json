@@ -652,5 +652,15 @@
   "profile.phone": "Phone",
   "profile.saved": "Saved.",
   "profile.save_failed": "Could not save your profile.",
-  "profile.load_failed": "Could not load your profile."
+  "profile.load_failed": "Could not load your profile.",
+  "firstrun.title": "Set up your organisation",
+  "firstrun.body": "Nothing exists yet. Start with the top unit — the company itself. Everything else hangs off it: departments, teams, seats and the people in them.",
+  "firstrun.name_label": "Company or top unit name",
+  "firstrun.name_placeholder": "Kwook",
+  "firstrun.create": "Create it",
+  "firstrun.failed": "Could not create the first unit.",
+  "firstrun.not_ready_title": "Not set up yet",
+  "firstrun.not_ready_body": "This organisation has not been created yet. An administrator has to add the top unit before anyone else can be placed in it.",
+  "noseat.title": "No seat yet",
+  "noseat.body": "Your account exists but you do not hold a seat in the organisation, so there is nothing here to show. Ask your manager to add you to their unit."
 }

@@ -200,7 +200,7 @@ export default function Station({ profile }: { profile: Profile }) {
           <div className="empty">
             <h1 className="empty__title">No such station</h1>
             <p className="empty__body">
-              This station does not exist, or it belongs to another tenant.
+              This station does not exist, or you do not have access to it.
             </p>
             <Link className="btn btn--primary" to="/wall">
               Back to the wall
