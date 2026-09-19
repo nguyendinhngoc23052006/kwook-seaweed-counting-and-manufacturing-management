@@ -736,5 +736,11 @@
   "station.restore": "Khôi phục",
   "station.retired": "Đã ngừng",
   "station.create_failed": "Không thêm được trạm.",
-  "station.update_failed": "Không đổi được trạm."
+  "station.update_failed": "Không đổi được trạm.",
+  "unitsettings.identity_hint": "Đơn vị này tên gì, thuộc loại nào, và còn hoạt động hay không.",
+  "unitsettings.saved": "Đã lưu.",
+  "unitsettings.nature_hint": "Để trống thì theo đơn vị gần nhất phía trên có đặt loại.",
+  "unitsettings.archive": "Lưu trữ đơn vị này",
+  "unitsettings.reactivate": "Mở lại đơn vị này",
+  "unitsettings.archive_hint": "Lưu trữ giữ nguyên mọi thứ và thu hồi quyền: các vị trí trong đơn vị đã lưu trữ không còn quyền hạn cho tới khi mở lại."
 }

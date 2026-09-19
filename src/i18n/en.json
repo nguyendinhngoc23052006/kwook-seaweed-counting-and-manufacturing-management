@@ -736,5 +736,11 @@
   "station.restore": "Bring back",
   "station.retired": "Retired",
   "station.create_failed": "Could not add that station.",
-  "station.update_failed": "Could not change that station."
+  "station.update_failed": "Could not change that station.",
+  "unitsettings.identity_hint": "What this unit is called, what kind of place it is, and whether it is still running.",
+  "unitsettings.saved": "Saved.",
+  "unitsettings.nature_hint": "Leave it inheriting and it follows the nearest unit above that sets one.",
+  "unitsettings.archive": "Archive this unit",
+  "unitsettings.reactivate": "Bring this unit back",
+  "unitsettings.archive_hint": "Archiving keeps everything and takes authority away: seats inside an archived unit carry no capabilities until it is brought back."
 }
