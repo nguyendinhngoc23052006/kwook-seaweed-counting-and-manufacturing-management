@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
 
   const { data: caller, error: callerError } = await asCaller
     .from("profiles")
-    .select("tenant_id, kind, role")
+    .select("kind, role")
     .eq("id", userData.user.id)
     .maybeSingle();
   if (callerError) return reply(500, { error: `Profile read failed: ${callerError.message}` });
@@ -72,12 +72,11 @@ Deno.serve(async (req) => {
   // Server-side function catalog: only what has real vision behind it.
   if (func !== "counting") return reply(400, { error: "Unknown function" });
 
-  // Bounded outstanding claims per tenant - belt and braces, since only
+  // Bounded outstanding claims - belt and braces, since only
   // admins can reach this line anyway.
   const { count } = await service
     .from("pairing_codes")
     .select("id", { count: "exact", head: true })
-    .eq("tenant_id", caller.tenant_id)
     .is("used_at", null)
     .gt("expires_at", new Date().toISOString());
   if ((count ?? 0) >= 20)
@@ -105,7 +104,6 @@ Deno.serve(async (req) => {
 
   const { error: deviceError } = await service.from("devices").insert({
     id: deviceId,
-    tenant_id: caller.tenant_id,
     name: name.trim(),
     camera_function: func,
     station_id: station_id || null,
@@ -121,7 +119,6 @@ Deno.serve(async (req) => {
   if (linkError || !tokenHash) return reply(500, { error: `Link: ${linkError?.message}` });
 
   const { error: pairError } = await service.from("pairing_codes").insert({
-    tenant_id: caller.tenant_id,
     device_id: deviceId,
     code_hash: await sha256Hex(code),
     token_hash: tokenHash,

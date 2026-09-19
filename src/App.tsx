@@ -28,6 +28,15 @@ const Wall = lazy(() => import("./pages/Wall"));
 
 // Reused at every Suspense boundary below rather than each site inventing its
 // own -- same visual language as the profile-loading card just past it.
+// App.tsx and OrgApp.tsx are separate BrowserRouter trees, so a <Navigate> from
+// one into the other resolves to nothing. Leaving the SPA is a real navigation.
+function HardRedirect({ to }: { to: string }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return <PageLoading />;
+}
+
 function PageLoading() {
   return (
     <div className="wrap">
@@ -167,7 +176,10 @@ export default function App() {
     );
   }
 
-  const home = profile.kind === "device" ? (door ? "/attendance" : "/capture") : "/wall";
+  // A device still boots straight to its own screen. A human belongs in the
+  // management hub -- the counting wall is one module inside the business, not
+  // the front door to it. /wall, /stations and /admin stay reachable by name.
+  const home = profile.kind === "device" ? (door ? "/attendance" : "/capture") : "/org";
 
   return (
     <BrowserRouter>
@@ -185,7 +197,12 @@ export default function App() {
           <Route path="/claim" element={<Claim profile={profile} />} />
           <Route path="/scan" element={<Scan profile={profile} />} />
           <Route path="/demo" element={<Demo />} />
-          <Route path="*" element={<Navigate to={home} replace />} />
+          <Route
+            path="*"
+            element={
+              home.startsWith("/org") ? <HardRedirect to={home} /> : <Navigate to={home} replace />
+            }
+          />
         </Routes>
       </Suspense>
     </BrowserRouter>
