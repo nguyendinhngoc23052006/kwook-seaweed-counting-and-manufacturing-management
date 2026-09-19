@@ -11,6 +11,10 @@ export async function listCameraDevices(nodeId: string): Promise<CameraDevice[]>
   const { data, error } = await client
     .from("camera_devices")
     .select("*")
+    // RLS lets the sysadmin and the CEO see archived cameras, so the live list
+    // has to say it does not want them -- otherwise an admin's Cameras page
+    // quietly fills up with everything anyone ever hid.
+    .is("archived_at", null)
     .eq("org_node_id", nodeId)
     .order("name");
   if (error) throw error;
@@ -144,12 +148,42 @@ export async function revokeCameraDevice(deviceId: string): Promise<void> {
 // allowed: a camera that has recorded anything is refused and must be revoked
 // instead, which stops it at once and keeps everything it measured. The refusal
 // comes back as the server's own sentence, so it says which camera and why.
-export async function deleteCameraDevice(deviceId: string): Promise<void> {
+// "Delete" hides a camera; it never destroys one. A camera is the parent of
+// everything it measured, so destroying one either takes that history with it
+// or is refused -- and the button people actually want is "stop showing me
+// this", which does not have to touch the data at all.
+//
+// Archiving implies revoking: a camera nobody can see must not still be
+// writing rows. Restoring brings it back REVOKED rather than running, so
+// un-hiding never silently puts a camera back to work in a doorway nobody has
+// looked at since.
+export async function archiveCameraDevice(deviceId: string): Promise<void> {
   if (!deviceId) throw new Error("camera required");
-  const { error } = await supabase().rpc("org_camera_delete_device", {
+  const { error } = await supabase().rpc("org_camera_archive_device", {
     p_device_id: deviceId,
   });
   if (error) throw error;
+}
+
+export async function unarchiveCameraDevice(deviceId: string): Promise<void> {
+  if (!deviceId) throw new Error("camera required");
+  const { error } = await supabase().rpc("org_camera_unarchive_device", {
+    p_device_id: deviceId,
+  });
+  if (error) throw error;
+}
+
+// Only the sysadmin and the CEO can read these at all -- the policy, not this
+// query, is what enforces that. For everyone else it comes back empty.
+export async function listArchivedCameraDevices(nodeId: string): Promise<CameraDevice[]> {
+  const { data, error } = await supabase()
+    .from("camera_devices")
+    .select("*")
+    .not("archived_at", "is", null)
+    .eq("org_node_id", nodeId)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as CameraDevice[];
 }
 
 // Placement after pairing. Until 20260929000000 camera_devices was SELECT-only

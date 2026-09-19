@@ -23,6 +23,7 @@ export interface CameraDevice {
   app_version: string | null;
   algorithm_version: string | null;
   revoked_at: string | null;
+  archived_at: string | null;
   created_at: string;
   created_by: string | null;
 }

@@ -15,10 +15,12 @@ import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useT } from "../../lib/i18n";
 import {
-  deleteCameraDevice,
+  archiveCameraDevice,
+  listArchivedCameraDevices,
   listCameraDevices,
   restoreCameraDevice,
   revokeCameraDevice,
+  unarchiveCameraDevice,
 } from "../../services/cameras";
 import { capabilityReaches, getMyCapabilityReach } from "../../services/capabilities";
 import type { CameraDevice } from "../../types/camera";
@@ -136,6 +138,57 @@ function DeviceRow({
   );
 }
 
+// Archived cameras are hidden from everyone but the sysadmin and the CEO, and
+// this section is the only place they exist in the app. It is the way back from
+// a mis-click: without it, "delete" would be a one-way door that only a
+// hand-written query could reopen.
+function ArchivedDevicesDisclosure({
+  devices,
+  onRestore,
+  restoring,
+  t,
+}: {
+  devices: CameraDevice[];
+  onRestore: (id: string) => void;
+  restoring: boolean;
+  t: ReturnType<typeof useT>;
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  if (devices.length === 0) return null;
+
+  return (
+    <div className="border-t border-hairline pt-4">
+      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? t("device.hide_archived") : t("device.show_archived", { count: devices.length })}
+      </Button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-ink-faint">{t("device.archived_hint")}</p>
+          {devices.map((d) => (
+            <div
+              key={d.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hairline bg-surface-raised p-3"
+            >
+              <div>
+                <div className="font-medium text-ink">{d.name}</div>
+                <div className="text-xs text-ink-faint">{t(`device.role_${d.role}`)}</div>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={restoring}
+                onClick={() => onRestore(d.id)}
+              >
+                {t("device.unarchive")}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Revoked devices are done, not active inventory -- same collapsed-by-default
 // shape as CapabilityHistoryDisclosure (NodeCapabilityPanel.tsx): the count
 // lives in the label, and there is nothing async to fetch since the page
@@ -242,15 +295,29 @@ export function CamerasPage(): JSX.Element {
       }),
   });
 
-  // The database decides whether this is allowed: a camera that recorded
-  // anything is refused and must stay revoked instead. Its refusal is a whole
-  // sentence naming the camera, so it is shown as-is rather than replaced.
-  const remove = useMutation({
-    mutationFn: (deviceId: string) => deleteCameraDevice(deviceId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: ["cameras", "devices", nodeId ?? null],
-      }),
+  // Hiding, not destroying. Everything this camera measured stays exactly
+  // where it is; it just stops appearing on any screen.
+  const refreshCameras = () => {
+    queryClient.invalidateQueries({ queryKey: ["cameras", "devices", nodeId ?? null] });
+    queryClient.invalidateQueries({ queryKey: ["cameras", "archived", nodeId ?? null] });
+  };
+
+  const archive = useMutation({
+    mutationFn: (deviceId: string) => archiveCameraDevice(deviceId),
+    onSuccess: refreshCameras,
+  });
+
+  const unarchive = useMutation({
+    mutationFn: (deviceId: string) => unarchiveCameraDevice(deviceId),
+    onSuccess: refreshCameras,
+  });
+
+  // Only the sysadmin and the CEO can read these; for everyone else the policy
+  // returns nothing and the section below never appears.
+  const archived = useQuery({
+    queryKey: ["cameras", "archived", nodeId ?? null],
+    queryFn: () => listArchivedCameraDevices(nodeId ?? ""),
+    enabled: canView && Boolean(nodeId),
   });
 
   if (reach.isLoading) {
@@ -304,13 +371,19 @@ export function CamerasPage(): JSX.Element {
               ))}
             </div>
           )}
+          <ArchivedDevicesDisclosure
+            devices={archived.data ?? []}
+            onRestore={(id) => unarchive.mutate(id)}
+            restoring={unarchive.isPending}
+            t={t}
+          />
           <RevokedDevicesDisclosure
             devices={revokedRows}
             canManage={canManage}
             onRestore={(id) => restore.mutate(id)}
             onDelete={(device) => {
               if (window.confirm(t("device.delete_confirm", { name: device.name }))) {
-                remove.mutate(device.id);
+                archive.mutate(device.id);
               }
             }}
             t={t}
@@ -322,8 +395,12 @@ export function CamerasPage(): JSX.Element {
         <Alert variant="error">{errorMessage(revoke.error, t("device.revoke_failed"))}</Alert>
       )}
 
-      {remove.isError && (
-        <Alert variant="error">{errorMessage(remove.error, t("device.delete_failed"))}</Alert>
+      {archive.isError && (
+        <Alert variant="error">{errorMessage(archive.error, t("device.delete_failed"))}</Alert>
+      )}
+
+      {unarchive.isError && (
+        <Alert variant="error">{errorMessage(unarchive.error, t("device.restore_failed"))}</Alert>
       )}
 
       {nodeId && (
