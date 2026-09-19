@@ -93,11 +93,11 @@ export default function Station({ profile }: { profile: Profile }) {
       try {
         const [station, lines, openSessions, hour, today] = await Promise.all([
           client
-            .from("stations")
+            .from("camera_stations")
             .select("id, name, line_id, kind, active")
             .eq("id", stationId)
             .maybeSingle(),
-          client.from("lines").select("id, name"),
+          client.from("camera_lines").select("id, name"),
           // No devices read: the session carries the phone's label and its own
           // evidence, and revoking a phone closes its sessions in the database
           // (migration 20260916170000), so an open session is a live camera.

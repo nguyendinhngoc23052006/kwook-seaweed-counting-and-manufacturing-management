@@ -55,9 +55,12 @@ const SESSION_COLUMNS =
 // session this same phone still holds is RESUMED (loadOpenSession), not
 // restarted, which is why the one-open-per-device index rejecting this insert
 // is the correct answer rather than a problem to clear out of the way.
+// algorithmVersion is null while no counter is attached: the session records
+// which algorithm produced its rows, and "none" is the truthful answer, not a
+// version string for software that is not running.
 export async function startSession(input: {
   deviceId: string;
-  algorithmVersion: string;
+  algorithmVersion: string | null;
 }): Promise<CaptureSession> {
   const { data, error } = await supabase()
     .from("camera_capture_sessions")

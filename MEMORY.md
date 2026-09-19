@@ -166,3 +166,30 @@
   pre-hardening copy that way and nearly reverted the 16-hour edge window and
   the `on_site` column. Find every file defining it first.
 
+
+## Retiring the legacy camera stack (2026-09-19)
+
+- The legacy stack was NOT a thin test-bed. `camera_*` was a column-for-column
+  twin of it, but the floor had accumulated seven guarantees after that twin
+  was written — line identity, the capture session, one-open-per-STATION,
+  clamped `last_evidence_at`, `skew_seconds`, the reaper, and an ending that
+  cannot be rewritten. Each exists to stop a SILENT wrong number. Check what a
+  twin is missing before calling a migration a rename.
+- A multi-transaction migration that FAILS partway commits its earlier
+  sections, and the next push replays the whole file against that half-applied
+  state. Any statement that reads something the same file later drops has to be
+  guarded, or the retry fails somewhere new and looks like a fresh bug.
+- Do not re-install or re-grant what an earlier migration owns. Repeating
+  `grant ... on all tables in schema cron` against an already-granted schema
+  fails 2BP01. Guard on `pg_extension` (installed), not
+  `pg_available_extensions` (available).
+- pgmq and pg_cron do not exist on a plain Postgres, so the local replay
+  harness cannot check the reaper at all. That half is verifiable only on a
+  Supabase preview branch — check it there rather than claiming it passed.
+- A stubbed counter filing `count: 0` is worse than no counter: on the wall it
+  is indistinguishable from a belt that genuinely ran empty. No rows is absence
+  of measurement; a zero is a measurement. Keep the session (it asserts the
+  camera is RUNNING, not a tally) and file nothing.
+- `python3 re.sub` over `config.toml` ate the block after the one it targeted,
+  because `(?:(?!\n\[).*\n)*` slid past a blank line. Deleting a named block
+  from a config file: match the exact literal text, then assert it was there.

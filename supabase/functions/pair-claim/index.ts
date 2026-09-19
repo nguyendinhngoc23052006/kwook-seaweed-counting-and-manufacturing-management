@@ -1,15 +1,33 @@
-// pair-claim: a signed-in ADMIN claims the QR a camera is showing.
+// pair-claim: a signed-in admin claims the QR a camera is showing, and an ORG
+// camera comes into existence at the node they claimed it into.
 //
 // Runs with the service role (platform-provided env), which is exactly why it
-// exists: creating the device account and minting its one-time login token are
-// the only privileged steps in pairing. The caller's admin role is verified
-// server-side from their JWT - the browser can claim nothing on its own.
+// exists: creating the device's auth account and minting its one-time login
+// token are the only privileged steps in pairing. The caller's authority is
+// verified server-side from their own JWT before the service role is touched -
+// the browser can claim nothing on its own.
+//
+// This is the ONLY way a camera is created. The old alternative handed the
+// admin an email and a password to type into the phone, which the constitution
+// forbids outright ("Cameras never have credentials"); it is deleted.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// The catalog the database itself enforces (camera_devices_role_check). Listed
+// here only to refuse a typo before spending an auth account on it -- the CHECK
+// constraint and org_camera_create_device() are what actually decide.
+const DEVICE_ROLES = [
+  "provisioning",
+  "counting",
+  "compliance",
+  "overview",
+  "check_in",
+  "check_out",
+];
 
 function reply(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -29,61 +47,67 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return reply(405, { error: "POST only" });
 
-  const service = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    { auth: { persistSession: false } },
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    return reply(500, { error: "Supabase configuration missing" });
+  }
 
-  // Who is calling? Verify with the caller's OWN token: a user-scoped client
-  // reads its own profile under RLS (profile_self), so the admin gate never
-  // depends on the service-role key being present - only the privileged writes
-  // below do. getUser errors surface verbatim so failures are diagnosable.
+  const service = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!jwt) return reply(401, { error: "No Authorization token on the request" });
 
-  const asCaller = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-    { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false } },
-  );
+  const asCaller = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    auth: { persistSession: false },
+  });
 
   const { data: userData, error: userError } = await asCaller.auth.getUser();
   if (userError || !userData.user) {
     return reply(401, { error: `Not signed in: ${userError?.message ?? "no user"}` });
   }
+  const callerId = userData.user.id;
 
-  const { data: caller, error: callerError } = await asCaller
-    .from("profiles")
-    .select("kind, role")
-    .eq("id", userData.user.id)
-    .maybeSingle();
-  if (callerError) return reply(500, { error: `Profile read failed: ${callerError.message}` });
-  if (!caller) return reply(403, { error: "No profile for this account yet" });
-  if (caller.kind !== "human" || caller.role !== "owner") {
-    return reply(403, { error: `Owner only (your role: ${caller.role})` });
-  }
-
-  const { code, name, func, station_id } = await req.json().catch(() => ({}));
+  const { code, name, role, node_id, station_id } = await req.json().catch(() => ({}));
   if (typeof code !== "string" || code.length < 32) return reply(400, { error: "Bad code" });
   if (typeof name !== "string" || name.trim().length === 0) {
     return reply(400, { error: "Name required" });
   }
-  // Server-side function catalog: only what has real vision behind it.
-  if (func !== "counting") return reply(400, { error: "Unknown function" });
+  if (typeof node_id !== "string" || node_id.length === 0) {
+    return reply(400, { error: "Node required" });
+  }
+  if (typeof role !== "string" || !DEVICE_ROLES.includes(role)) {
+    return reply(400, { error: "Unknown camera role" });
+  }
 
-  // Bounded outstanding claims - belt and braces, since only
-  // admins can reach this line anyway.
+  // The gate, asked with the CALLER'S OWN token under RLS: may this person
+  // manage cameras at the node they are claiming into? Never a header, never a
+  // body field, and never the service role.
+  const { data: canManage, error: canManageError } = await asCaller.rpc("org_camera_can_manage", {
+    p_node_id: node_id,
+  });
+  if (canManageError) {
+    return reply(500, { error: `Could not verify permission: ${canManageError.message}` });
+  }
+  if (!canManage) return reply(403, { error: "You cannot manage cameras at this node" });
+
+  // Bounded outstanding claims - belt and braces, since only people who can
+  // manage cameras somewhere reach this line anyway.
   const { count } = await service
     .from("pairing_codes")
     .select("id", { count: "exact", head: true })
     .is("used_at", null)
     .gt("expires_at", new Date().toISOString());
-  if ((count ?? 0) >= 20)
+  if ((count ?? 0) >= 20) {
     return reply(429, { error: "Too many unclaimed pairings - wait for them to expire" });
+  }
 
   // The device account. Random address, random unknowable password - nobody
-  // ever types credentials on a camera.
+  // ever types credentials on a camera, and nobody is ever shown them.
   const email = `${crypto.randomUUID()}@machines.kwook.internal`;
   const { data: created, error: createError } = await service.auth.admin.createUser({
     email,
@@ -91,24 +115,36 @@ Deno.serve(async (req) => {
     password: crypto.randomUUID() + crypto.randomUUID(),
     user_metadata: { display_name: name.trim() },
   });
-  if (createError || !created.user)
+  if (createError || !created.user) {
     return reply(500, { error: `Create failed: ${createError?.message}` });
+  }
   const deviceId = created.user.id;
 
-  // The on_auth_user_created trigger made a pending human profile; make it the device.
-  const { error: profileError } = await service
-    .from("profiles")
-    .update({ kind: "device", role: "viewer" })
-    .eq("id", deviceId);
-  if (profileError) return reply(500, { error: `Profile: ${profileError.message}` });
+  // Everything past this point can fail, and an auth account with no camera row
+  // is an orphan nobody can see or delete from the app. So each failure rolls
+  // the account back before it answers.
+  const rollback = async (message: string, status = 500) => {
+    const { error: cleanupError } = await service.auth.admin.deleteUser(deviceId);
+    if (cleanupError) {
+      console.error("rollback failed -- orphaned auth account:", deviceId, cleanupError);
+    }
+    return reply(status, { error: message });
+  };
 
-  const { error: deviceError } = await service.from("devices").insert({
-    id: deviceId,
-    name: name.trim(),
-    camera_function: func,
-    station_id: station_id || null,
+  // One writer for the camera row: the same security-definer function the org
+  // hub has always used. It flips the profile to kind='device' (the
+  // on_auth_user_created trigger makes every new account a pending HUMAN, which
+  // would strand the camera on the approval screen) and re-checks the role
+  // against the catalog.
+  const { error: deviceError } = await service.rpc("org_camera_create_device", {
+    p_account_id: deviceId,
+    p_node_id: node_id,
+    p_name: name.trim(),
+    p_role: role,
+    p_created_by_account_id: callerId,
+    p_station_id: station_id || null,
   });
-  if (deviceError) return reply(500, { error: `Device: ${deviceError.message}` });
+  if (deviceError) return await rollback(`Device: ${deviceError.message}`);
 
   // One-time login token for the waiting camera.
   const { data: link, error: linkError } = await service.auth.admin.generateLink({
@@ -116,7 +152,7 @@ Deno.serve(async (req) => {
     email,
   });
   const tokenHash = link?.properties?.hashed_token;
-  if (linkError || !tokenHash) return reply(500, { error: `Link: ${linkError?.message}` });
+  if (linkError || !tokenHash) return await rollback(`Link: ${linkError?.message}`);
 
   const { error: pairError } = await service.from("pairing_codes").insert({
     device_id: deviceId,
@@ -124,7 +160,7 @@ Deno.serve(async (req) => {
     token_hash: tokenHash,
     expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
   });
-  if (pairError) return reply(500, { error: `Pairing: ${pairError.message}` });
+  if (pairError) return await rollback(`Pairing: ${pairError.message}`);
 
   return reply(200, { ok: true, device_id: deviceId });
 });

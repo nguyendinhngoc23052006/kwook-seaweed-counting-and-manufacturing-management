@@ -1,14 +1,10 @@
 import { supabase } from "../lib/supabaseClient";
-import type {
-  CameraDevice,
-  CameraDeviceRole,
-  CameraStation,
-  CreatedCameraDevice,
-} from "../types/camera";
+import type { CameraDevice, CameraDeviceRole, CameraStation } from "../types/camera";
 
-// Human admin side: list/create/revoke. Reads are plain RLS-gated selects
-// (org_admin() or a granted capability); creating a device needs a real
-// Supabase Auth account, which only the Edge Function's service role can do.
+// Human admin side: list/claim/revoke. Reads are plain RLS-gated selects
+// (org_admin() or a granted capability); bringing a camera into existence needs
+// a real Supabase Auth account, which only the Edge Function's service role
+// can do -- and it is always a CLAIM of a QR the phone is already showing.
 
 export async function listCameraDevices(nodeId: string): Promise<CameraDevice[]> {
   const client = supabase();
@@ -52,23 +48,51 @@ async function lineIdFor(nodeId: string, name: string): Promise<string> {
   return data as string;
 }
 
-export async function createCameraDevice(input: {
+// A camera is CLAIMED, never issued credentials. The phone invents a secret
+// and shows it as a QR; this hands that code to the server along with the node
+// the claimer is standing in, and the server mints the device's account and a
+// one-time login token the waiting phone redeems itself. Nobody ever sees a
+// password, which is the constitution's rule, not a preference.
+//
+// The Edge Function is the one privileged step -- creating an auth account
+// needs the Admin API -- and it verifies the CALLER's authority at this node
+// with the caller's own token before it touches the service role.
+export async function claimCameraPairing(input: {
   nodeId: string;
   name: string;
   role: CameraDeviceRole;
+  code: string;
   stationId?: string | null;
-}): Promise<CreatedCameraDevice> {
-  const client = supabase();
-  const { data, error } = await client.functions.invoke("create-camera-device", {
+}): Promise<void> {
+  const name = input.name.trim();
+  const code = input.code.trim();
+  if (!name) throw new Error("camera name required");
+  if (!code) throw new Error("pairing code required");
+  const { data, error } = await supabase().functions.invoke("pair-claim", {
     body: {
-      nodeId: input.nodeId,
-      name: input.name,
+      code,
+      name,
       role: input.role,
-      stationId: input.stationId ?? null,
+      node_id: input.nodeId,
+      station_id: input.stationId ?? null,
     },
   });
-  if (error) throw error;
-  return data as CreatedCameraDevice;
+  // functions.invoke throws on a non-2xx and hides our JSON body behind a
+  // generic message; dig the real reason out of the Response it stashes on
+  // error.context so the claimer sees what actually failed.
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const body = await context.json().catch(() => null);
+      if (body && typeof body === "object" && "error" in body) {
+        throw new Error(String((body as { error: unknown }).error));
+      }
+    }
+    throw error;
+  }
+  if (data && typeof data === "object" && "error" in data && data.error) {
+    throw new Error(String((data as { error: unknown }).error));
+  }
 }
 
 export async function revokeCameraDevice(deviceId: string): Promise<void> {
