@@ -5,16 +5,23 @@ import { useT } from "../../lib/i18n";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 
-// Point this phone at the QR a waiting camera is showing. jsQR decodes pure
-// pixels, so this works on every browser rather than only the ones shipping
-// BarcodeDetector.
-//
-// The QR carries the pairing code and nothing else: a code is a ten-minute
-// secret that only becomes a camera when someone who may manage cameras at a
-// node claims it, so there is no link to follow and nothing to open.
+// A pairing QR carries a link ending in #pair=<code> so a phone's own camera
+// app can follow it. Either that link or a bare code is accepted here: what
+// this needs is the code, and both forms carry it.
+export function readPairingCode(scanned: string): string | null {
+  const text = scanned.trim();
+  const marker = "#pair=";
+  const at = text.indexOf(marker);
+  const code = at === -1 ? text : text.slice(at + marker.length);
+  return /^[0-9a-f]{32,}$/.test(code) ? code : null;
+}
+
 const SCAN_INTERVAL_MS = 250;
 const SCAN_WIDTH = 480;
 
+// Point this phone at the QR a waiting camera is showing. jsQR decodes pure
+// pixels, so this works on every browser rather than only the ones shipping
+// BarcodeDetector.
 export function PairingCodeScanner({
   onCode,
   disabled,
@@ -55,10 +62,10 @@ export function PairingCodeScanner({
       ctx.drawImage(video, 0, 0, w, h);
       const hit = jsQR(ctx.getImageData(0, 0, w, h).data, w, h);
       if (!hit) return;
-      const code = hit.data.trim();
       // Anything that is not a pairing code is another QR in the frame, not an
       // error worth showing -- keep looking.
-      if (!/^[0-9a-f]{32,}$/.test(code)) return;
+      const code = readPairingCode(hit.data);
+      if (!code) return;
       active = false;
       const stream = video.srcObject as MediaStream | null;
       for (const track of stream?.getTracks() ?? []) track.stop();

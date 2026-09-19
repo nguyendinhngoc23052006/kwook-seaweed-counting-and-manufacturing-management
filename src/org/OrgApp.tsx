@@ -184,7 +184,17 @@ function OrgRoutes() {
           `/settings` siblings) -- reusing CamerasPage rather than rewriting
           those three links to the older `/org/cameras/:id` tab route. */}
       <Route path="/org/node/:nodeId/cameras" element={<CamerasPage />} />
-      <Route path="/org/cameras" element={<Navigate to={`/org/cameras/${rootNodeId}`} replace />} />
+      {/* The hash rides along: a pairing QR points at /org/cameras#pair=<code>
+          and a bare string `to` would drop it on the way to the node route. */}
+      <Route
+        path="/org/cameras"
+        element={
+          <Navigate
+            to={{ pathname: `/org/cameras/${rootNodeId}`, hash: window.location.hash }}
+            replace
+          />
+        }
+      />
       <Route path="/org/cameras/:nodeId" element={<CamerasPage />} />
       <Route
         path="/org/attendance"

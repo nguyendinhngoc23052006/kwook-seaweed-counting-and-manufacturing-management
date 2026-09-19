@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type JSX, useState } from "react";
+import { type JSX, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AttendanceConfigDialog } from "../../components/org/AttendanceConfigDialog";
 import { CameraStationsPanel } from "../../components/org/CameraStationsPanel";
 import { EditCameraDeviceDialog } from "../../components/org/EditCameraDeviceDialog";
 import { PairCameraDialog } from "../../components/org/PairCameraDialog";
+import { readPairingCode } from "../../components/org/PairingCodeScanner";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { Empty, ErrorState } from "../../components/ui/EmptyState";
@@ -153,8 +154,23 @@ export function CamerasPage(): JSX.Element {
   const t = useT();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  // Arriving from a scanned pairing QR: the code rides in the hash, so the
+  // claim opens already filled and the manager only names the camera. The hash
+  // is cleared immediately -- a pairing code has no business sitting in the
+  // address bar, in history, or in a shared screenshot of this page.
+  const [scannedCode] = useState(() => {
+    const code = readPairingCode(window.location.hash);
+    if (code) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    return code;
+  });
   const [configDevice, setConfigDevice] = useState<CameraDevice | null>(null);
   const [editDevice, setEditDevice] = useState<CameraDevice | null>(null);
+
+  useEffect(() => {
+    if (scannedCode) setCreateOpen(true);
+  }, [scannedCode]);
 
   const reach = useQuery({
     queryKey: ["org", "reach"],
@@ -256,6 +272,7 @@ export function CamerasPage(): JSX.Element {
       {nodeId && (
         <PairCameraDialog
           nodeId={nodeId}
+          initialCode={scannedCode}
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           onPaired={() =>

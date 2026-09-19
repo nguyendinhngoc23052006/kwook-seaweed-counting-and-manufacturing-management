@@ -30,16 +30,20 @@ export function PairCameraDialog({
   open,
   onClose,
   onPaired,
+  initialCode,
 }: {
   nodeId: string;
   open: boolean;
   onClose: () => void;
   onPaired: () => void;
+  // Set when the manager arrived here by following a scanned pairing QR, so
+  // the code is already in hand and there is nothing to scan again.
+  initialCode?: string | null;
 }): JSX.Element {
   const t = useT();
   const [name, setName] = useState("");
   const [role, setRole] = useState<CameraDeviceRole>("counting");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(initialCode ?? "");
   const [done, setDone] = useState(false);
 
   const pair = useMutation({
