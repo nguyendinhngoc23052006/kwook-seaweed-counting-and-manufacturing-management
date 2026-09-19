@@ -12,6 +12,7 @@ import { Select } from "../../components/ui/Select";
 import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
+import { archiveEntity } from "../../services/archive";
 import { getMyCapabilityReach } from "../../services/capabilities";
 import {
   type CapabilityKey,
@@ -93,6 +94,15 @@ export function UnitSettingsPage(): JSX.Element {
     mutationFn: (key: string) => setNodeNature(nodeId as string, key || null),
     onSuccess: afterWrite,
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
+  });
+
+  // Hiding takes the subtree with it: a department hidden while its teams stay
+  // on the chart would leave them parented to something nobody can see.
+  const hide = useMutation({
+    mutationFn: () => archiveEntity("org_node", nodeId as string),
+    onSuccess: () => {
+      window.location.replace("/org");
+    },
   });
 
   const toggleActive = useMutation({
@@ -204,10 +214,36 @@ export function UnitSettingsPage(): JSX.Element {
               disabled={toggleActive.isPending}
               onClick={() => toggleActive.mutate(!node.active)}
             >
-              {node.active ? t("unitsettings.archive") : t("unitsettings.reactivate")}
+              {node.active ? t("unitsettings.deactivate") : t("unitsettings.reactivate")}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">{t("unitsettings.archive_hint")}</p>
+          <p className="text-xs text-muted-foreground">{t("unitsettings.deactivate_hint")}</p>
+
+          {/* Deactivating and hiding are different asks. The first is a fact
+              about the business and stays on the chart; the second is a fact
+              about the person looking. Offered once the unit is inactive, so
+              the subtree is already out of authority before it leaves view. */}
+          {!node.active && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={hide.isPending}
+                onClick={() => {
+                  if (window.confirm(t("unitsettings.delete_confirm", { name: node.name }))) {
+                    hide.mutate();
+                  }
+                }}
+              >
+                {t("unitsettings.delete")}
+              </Button>
+              {hide.isError && (
+                <span className="text-xs text-danger">
+                  {errorMessage(hide.error, t("archive.failed"))}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Section>
 
