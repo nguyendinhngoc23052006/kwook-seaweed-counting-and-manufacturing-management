@@ -104,3 +104,32 @@ describe("the legacy stylesheet", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// index.css declares a handful of rules OUTSIDE every layer -- the focus ring,
+// the reduced-motion override, the token blocks. Un-layered CSS beats every
+// layered rule regardless of specificity, so `:where()` there buys
+// specificity-zero WITHIN the un-layered origin and nothing at all against
+// Tailwind's utilities. The focus rule once set border-radius and silently
+// reshaped every focused element: rounded-xl and rounded-full both collapsed
+// to 6px. Anything an un-layered rule declares is therefore unarguable, so it
+// may only declare what Tailwind has no utility for.
+describe("the un-layered focus rule in index.css", () => {
+  const css = readFileSync(join(__dirname, "index.css"), "utf8");
+  const rule = css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .match(
+      /:where\(a, button, input, select, textarea, \[tabindex\]\):focus-visible\s*\{([^}]*)\}/,
+    );
+
+  it("exists", () => {
+    expect(rule).not.toBeNull();
+  });
+
+  it("declares nothing Tailwind also owns", () => {
+    const declared = (rule?.[1] ?? "")
+      .split(";")
+      .map((d) => d.split(":")[0]?.trim())
+      .filter(Boolean);
+    expect(declared.sort()).toEqual(["outline", "outline-offset"]);
+  });
+});

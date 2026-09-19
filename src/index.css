@@ -267,11 +267,20 @@
 }
 
 /* One focus treatment everywhere. Interactive elements opt out of the UA
-   outline only when they provide this. */
+   outline only when they provide this.
+
+   No border-radius here. This rule is UN-LAYERED, and un-layered CSS beats
+   every layered rule regardless of specificity -- `:where()` makes it
+   specificity-zero but that only settles ties WITHIN a layer, not against
+   one. So a radius set here overrode every Tailwind radius utility the
+   moment an element took focus: `rounded-xl` (18px) and even `rounded-full`
+   both collapsed to 6px, so a pill button visibly turned into a rectangle
+   under the keyboard. It bought nothing either way -- an outline already
+   follows the element's own border-radius in every browser this app
+   supports. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--kw-ring);
   outline-offset: 2px;
-  border-radius: 0.375rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
