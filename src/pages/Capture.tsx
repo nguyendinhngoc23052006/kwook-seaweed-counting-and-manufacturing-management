@@ -268,7 +268,7 @@ export default function Capture({ profile }: { profile: Profile }) {
     <div className="app">
       <header className="appbar">
         <span className="appbar__brand">{config.name}</span>
-        <span className="muted truncate">
+        <span className="muted floor-truncate">
           {session ? functionLabel(session.camera_function) : "Not on the line"}
         </span>
         <span className="appbar__spacer" />
@@ -312,7 +312,7 @@ export default function Capture({ profile }: { profile: Profile }) {
                     where these counts are actually being filed. */}
                 <div className="row">
                   <span className="label">{functionLabel(session.camera_function)}</span>
-                  <span className="muted truncate">
+                  <span className="muted floor-truncate">
                     {placeLabel(session.line_name, session.station_name)}
                   </span>
                   <span className="muted">running {formatElapsed(session.started_at, nowMs)}</span>

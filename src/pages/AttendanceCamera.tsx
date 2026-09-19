@@ -271,7 +271,7 @@ export default function AttendanceCamera({ door }: { door: DoorCamera }) {
       <header className="appbar">
         <span className="appbar__brand">{liveDoor.name}</span>
         <span className="appbar__spacer" />
-        <span className="truncate">
+        <span className="floor-truncate">
           {roleLabel.vi} <span className="muted">{roleLabel.en}</span>
         </span>
       </header>

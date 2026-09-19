@@ -95,7 +95,7 @@ export function Select<T extends string = string>({
 
   const triggerBody = (
     <>
-      <span className={cn("truncate text-left", !selected && "text-muted-foreground")}>
+      <span className={cn("min-w-0 truncate text-left", !selected && "text-muted-foreground")}>
         {label}
       </span>
       <ChevronDown className="size-4 shrink-0 text-muted-foreground" />

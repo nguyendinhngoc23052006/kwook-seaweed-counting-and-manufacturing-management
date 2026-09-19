@@ -445,6 +445,14 @@ export function OrgChartPage(): JSX.Element {
     zoomRef.current = 1;
     inner.style.zoom = "1";
 
+    // Then land on the company, not on empty space. The tree is a centred
+    // nested flex layout, so the root box sits at the horizontal MIDPOINT of
+    // content that is routinely many screens wide -- and a fresh scroll
+    // container starts at scrollLeft 0, which is the far-left edge, where
+    // there is nothing above the leftmost leaf but the blank area under its
+    // connector. On a phone that is the entire first screen.
+    pane.scrollLeft = Math.max(0, (pane.scrollWidth - pane.clientWidth) / 2);
+
     function applyPendingWheel() {
       if (!pane || !inner) return;
       const pending = pendingWheel.current;
@@ -526,6 +534,11 @@ export function OrgChartPage(): JSX.Element {
     () => (showArchived ? nodes : activeSubtreeOnly(nodes)),
     [nodes, showArchived],
   );
+  // What the toggle is actually worth right now. Unlabelled, it is a control
+  // whose effect is invisible whenever the answer is "none" -- you tick it,
+  // nothing moves, and you cannot tell whether it worked or there was simply
+  // nothing hidden. Counted, it answers the question before you touch it.
+  const archivedCount = useMemo(() => nodes.length - activeSubtreeOnly(nodes).length, [nodes]);
   // Rebuilt only when the visible snapshot changes, not per keystroke --
   // matching itself is then a plain substring scan over already-folded text.
   const searchIndex = useMemo(() => buildSearchIndex(visibleNodes), [visibleNodes]);
@@ -577,7 +590,12 @@ export function OrgChartPage(): JSX.Element {
         <Checkbox
           checked={showArchived}
           onChange={setShowArchived}
-          label={t("orgchart.show_archived")}
+          disabled={archivedCount === 0}
+          label={
+            archivedCount > 0
+              ? t("orgchart.show_archived_count", { count: archivedCount })
+              : t("orgchart.show_archived")
+          }
         />
       </div>
 

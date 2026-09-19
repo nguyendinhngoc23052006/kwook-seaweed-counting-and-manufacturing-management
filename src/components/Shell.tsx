@@ -78,7 +78,7 @@ export default function Shell({
           )}
         </nav>
         <span className="appbar__spacer" />
-        <span className="muted truncate appbar__who">{profile.display_name}</span>
+        <span className="muted floor-truncate appbar__who">{profile.display_name}</span>
         <button type="button" className="btn btn--ghost btn--sm" onClick={signOut}>
           Sign out
         </button>
