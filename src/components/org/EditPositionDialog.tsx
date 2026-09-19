@@ -2,9 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
-import { rankLabel } from "../../lib/orgLabels";
-import type { OrgTreeSeat } from "../../services/nodes";
-import { abolishPosition, updatePosition } from "../../services/positions";
+import { nodeLabel, rankLabel } from "../../lib/orgLabels";
+import { managerSeatChoices, type OrgTreeNode, type OrgTreeSeat } from "../../services/nodes";
+import { abolishPosition, movePosition, updatePosition } from "../../services/positions";
 import type { Rank } from "../../services/ranks";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
@@ -17,6 +17,9 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   seat: OrgTreeSeat;
+  // The whole tree, so the seat can be re-hung under a manager somewhere else.
+  nodes: OrgTreeNode[];
+  nodeId: string;
   ranks: Rank[];
   // The most senior rank the viewer holds, or null for an org admin, who is
   // bound by none of this. Everyone else may only touch a seat strictly below
@@ -33,6 +36,8 @@ export function EditPositionDialog({
   onClose,
   onSaved,
   seat,
+  nodes,
+  nodeId,
   ranks,
   myRankOrdinal,
 }: Props): JSX.Element | null {
@@ -40,6 +45,7 @@ export function EditPositionDialog({
   const [title, setTitle] = useState(seat.title);
   const [rankKey, setRankKey] = useState(seat.rank_key);
   const [confirmingAbolish, setConfirmingAbolish] = useState(false);
+  const [managerPositionId, setManagerPositionId] = useState(seat.reports_to ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const allowedRanks =
@@ -61,6 +67,27 @@ export function EditPositionDialog({
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
 
+  // movePosition() has existed since the model shipped and no rendered control
+  // ever called it, so a seat could be created in the wrong unit and never
+  // moved. The database wants appoint reach at BOTH ends and refuses a manager
+  // outside your own branch; this only offers what it would accept.
+  const move = useMutation({
+    mutationFn: () => {
+      const target = choices.find((c) => c.seat.position_id === managerPositionId);
+      return movePosition({
+        positionId: seat.position_id,
+        newNodeId: target?.node.id ?? nodeId,
+        newReportsToPositionId: managerPositionId || null,
+      });
+    },
+    onSuccess: () => {
+      setError(null);
+      onSaved();
+      onClose();
+    },
+    onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
+  });
+
   const abolish = useMutation({
     mutationFn: () => abolishPosition(seat.position_id),
     onSuccess: () => {
@@ -71,7 +98,11 @@ export function EditPositionDialog({
     onError: (e) => setError(errorMessage(e, t("orgtree.write_failed"))),
   });
 
-  const busy = save.isPending || abolish.isPending;
+  // A seat cannot be its own manager, and the root seat has none to pick.
+  const choices = managerSeatChoices(nodes, nodeId).filter(
+    (c) => c.seat.position_id !== seat.position_id,
+  );
+  const busy = save.isPending || abolish.isPending || move.isPending;
   const changed = title.trim() !== seat.title || rankKey !== seat.rank_key;
   const canSave = title.trim() !== "" && selectedRank !== undefined && changed && !busy;
 
@@ -158,6 +189,35 @@ export function EditPositionDialog({
             <p className="mt-1 text-xs text-danger-text">{t("seat_edit.rank_above_you")}</p>
           )}
         </div>
+
+        {choices.length > 0 && (
+          <div className="border-t border-border pt-4">
+            <Label htmlFor="seat-edit-manager">{t("seat.reports_to")}</Label>
+            <Select
+              id="seat-edit-manager"
+              value={managerPositionId}
+              onChange={setManagerPositionId}
+              ariaLabel={t("seat.reports_to")}
+              disabled={busy}
+              searchable={choices.length >= 6}
+              options={choices.map(({ seat: s2, node }) => ({
+                value: s2.position_id,
+                label: `${s2.title} · ${nodeLabel(node, locale)}`,
+              }))}
+            />
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || !managerPositionId || managerPositionId === seat.reports_to}
+                onClick={() => move.mutate()}
+              >
+                {move.isPending ? t("common.loading") : t("seat_edit.move")}
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{t("seat_edit.move_hint")}</p>
+          </div>
+        )}
 
         <div className="border-t border-border pt-4">
           <Button

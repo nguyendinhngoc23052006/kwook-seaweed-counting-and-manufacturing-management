@@ -21,6 +21,7 @@ import { NotificationsPage } from "../pages/org/NotificationsPage";
 import { OrgChartPage } from "../pages/org/OrgChartPage";
 import { PersonPage } from "../pages/org/PersonPage";
 import { ProfilePage } from "../pages/org/ProfilePage";
+import { RanksPage } from "../pages/org/RanksPage";
 import { UnitPage } from "../pages/org/UnitPage";
 import { UnitPeoplePage } from "../pages/org/UnitPeoplePage";
 import { UnitSettingsPage } from "../pages/org/UnitSettingsPage";
@@ -191,6 +192,7 @@ function OrgRoutes() {
       />
       <Route path="/org/attendance/:nodeId" element={<AttendancePage />} />
       <Route path="/org/chart" element={<OrgChartPage />} />
+      <Route path="/org/ranks" element={<RanksPage />} />
       <Route path="/org/jobs" element={<JobPostingsPage />} />
       <Route path="/org/jobs/:jobId/applications" element={<JobApplicationsPage />} />
       <Route path="/org/work" element={<WorkPage />} />

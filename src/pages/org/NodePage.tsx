@@ -916,6 +916,8 @@ export function NodePage(): JSX.Element {
           onClose={() => setEditSeat(null)}
           onSaved={invalidateAfterSeatWrite}
           seat={editSeat}
+          nodes={nodes}
+          nodeId={node.id}
           ranks={ranks.data ?? []}
           myRankOrdinal={myReach?.isAdmin ? null : (myReach?.rankOrdinal ?? null)}
         />
