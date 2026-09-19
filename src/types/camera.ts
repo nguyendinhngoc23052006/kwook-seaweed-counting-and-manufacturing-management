@@ -38,6 +38,9 @@ export interface CameraStation {
   line_name: string;
   kind: CameraDeviceRole;
   active: boolean;
+  // Retired is "not running any more"; archived is "do not show me this".
+  // Different questions, and only the first belongs on the floor's screens.
+  archived_at: string | null;
   created_at: string;
 }
 

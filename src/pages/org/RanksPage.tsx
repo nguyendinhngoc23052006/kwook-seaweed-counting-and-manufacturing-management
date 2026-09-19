@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type JSX, useState } from "react";
+import { ArchivedDisclosure } from "../../components/org/ArchivedDisclosure";
 import { SysadminsPanel } from "../../components/org/SysadminsPanel";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
@@ -13,6 +14,7 @@ import { ListSkeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/errorMessage";
 import { useI18n } from "../../lib/i18n";
 import { rankLabel } from "../../lib/orgLabels";
+import { archiveEntity, unarchiveEntity } from "../../services/archive";
 import { getMyCapabilityReach } from "../../services/capabilities";
 import {
   createRank,
@@ -50,7 +52,10 @@ export function RanksPage(): JSX.Element {
     enabled: isAdmin,
   });
 
-  const rows = ranks.data ?? [];
+  // The ladder itself is the sysadmin's and the CEO's, and so is hiding a rung
+  // of it -- the read policy hands archived ranks to nobody else.
+  const rows = (ranks.data ?? []).filter((r: Rank) => !r.archived_at);
+  const hidden = (ranks.data ?? []).filter((r: Rank) => r.archived_at);
   const active = rows.filter((r) => r.active);
 
   const refresh = () => {
@@ -91,6 +96,18 @@ export function RanksPage(): JSX.Element {
     onError: (e) => setError(errorMessage(e, t("ranks.update_failed"))),
   });
 
+  const hide = useMutation({
+    mutationFn: (id: string) => archiveEntity("rank", id),
+    onSuccess: refresh,
+    onError: (e) => setError(errorMessage(e, t("archive.failed"))),
+  });
+
+  const restore = useMutation({
+    mutationFn: (id: string) => unarchiveEntity("rank", id),
+    onSuccess: refresh,
+    onError: (e) => setError(errorMessage(e, t("archive.restore_failed"))),
+  });
+
   if (reach.isLoading) return <ListSkeleton rows={3} label={t("common.loading")} />;
   if (!isAdmin) return <ErrorState message={t("common.access_denied")} />;
   if (ranks.isError) {
@@ -126,19 +143,46 @@ export function RanksPage(): JSX.Element {
                 subtitle={rank.key}
                 meta={!rank.active ? <Pill tone="neutral">{t("ranks.retired")}</Pill> : undefined}
                 trailing={
-                  <Button
-                    size="sm"
-                    variant={rank.active ? "ghost" : "secondary"}
-                    disabled={toggle.isPending}
-                    onClick={() => toggle.mutate({ id: rank.id, active: !rank.active })}
-                  >
-                    {rank.active ? t("ranks.retire") : t("ranks.restore")}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={rank.active ? "ghost" : "secondary"}
+                      disabled={toggle.isPending}
+                      onClick={() => toggle.mutate({ id: rank.id, active: !rank.active })}
+                    >
+                      {rank.active ? t("ranks.retire") : t("ranks.restore")}
+                    </Button>
+                    {!rank.active && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={hide.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(t("archive.confirm", { name: rankLabel(rank, locale) }))
+                          ) {
+                            hide.mutate(rank.id);
+                          }
+                        }}
+                      >
+                        {t("archive.delete")}
+                      </Button>
+                    )}
+                  </div>
                 }
               />
             ))}
           </ListRows>
         )}
+        <ArchivedDisclosure
+          rows={hidden.map((rank: Rank) => ({
+            id: rank.id,
+            title: rankLabel(rank, locale),
+            subtitle: rank.key,
+          }))}
+          onRestore={(id) => restore.mutate(id)}
+          restoring={restore.isPending}
+        />
         <p className="pb-2 pt-3 text-xs text-muted-foreground">{t("ranks.retire_hint")}</p>
       </Section>
 
