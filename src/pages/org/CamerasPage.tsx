@@ -348,12 +348,14 @@ export function CamerasPage(): JSX.Element {
 
       {devices.isLoading ? (
         <ListSkeleton rows={3} label={t("device.loading")} />
-      ) : rows.length === 0 ? (
-        <Empty title={t("device.admin_no_devices")} />
       ) : (
         <>
           {liveRows.length === 0 ? (
-            <Empty title={t("device.admin_no_live_devices")} />
+            <Empty
+              title={
+                rows.length === 0 ? t("device.admin_no_devices") : t("device.admin_no_live_devices")
+              }
+            />
           ) : (
             <div className="space-y-2">
               {liveRows.map((d) => (
@@ -371,6 +373,12 @@ export function CamerasPage(): JSX.Element {
               ))}
             </div>
           )}
+          {/* Outside the empty check, always. These two lists are the ONLY
+              way back from a revoke or a hide -- nesting them inside "are
+              there any live cameras" meant hiding the last one took the
+              restore list away with it, which is the one-way door this whole
+              design exists to avoid. They render null on their own when there
+              is nothing in them. */}
           <ArchivedDevicesDisclosure
             devices={archived.data ?? []}
             onRestore={(id) => unarchive.mutate(id)}
